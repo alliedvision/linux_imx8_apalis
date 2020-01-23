@@ -1,0 +1,193 @@
+// SPDX-License-Identifier: GPL-2.0+ OR X11
+/*
+ * Copyright 2018-2019 Toradex
+ */
+
+/dts-v1/;
+
+#include "fsl-imx8qxp-colibri.dtsi"
+#include "fsl-imx8qxp-colibri-eval-v3.dtsi"
+
+/ {
+	model = "Toradex Colibri iMX8QXP/DX with LT8912 MIPI-DSI 2 HDMI bridge";
+	compatible = "toradex,colibri-imx8qxp-dsihdmi-eval-v3", "toradex,colibri-imx8qxp", "fsl,imx8qxp";
+
+};
+
+/* Colibri Parallel RGB */
+&adma_lcdif {
+	status = "disabled";
+};
+
+&backlight {
+	status = "disabled";
+};
+
+/* Display Prefetch Resolve, (Tiling) */
+&dpr1_channel1 {
+	status = "okay";
+};
+
+&dpr1_channel2 {
+	status = "okay";
+};
+
+&dpr1_channel3 {
+	status = "okay";
+};
+
+&dpr2_channel1 {
+	status = "okay";
+};
+
+&dpr2_channel2 {
+	status = "okay";
+};
+
+&dpr2_channel3 {
+	status = "okay";
+};
+
+&dpu1 {
+	status = "okay";
+};
+
+&gpu_3d0 {
+	status = "okay";
+};
+
+/* DSI/LVDS port 0 */
+&i2c0_mipi_lvds0 {
+	status = "okay";
+
+	/* DSI to HDMI Adapter V1.1A */
+	i2c-switch@70 {
+		compatible = "nxp,pca9540";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0x70>;
+		i2c-mux-idle-disconnect;
+
+		i2c_sw0: i2c-sw@0 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0>;
+
+			/* DDC/EDID */
+		};
+
+		i2c-sw@1 {
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <1>;
+
+			lt8912@48 {
+				compatible = "lontium,lt8912";
+				ddc-i2c-bus = <&i2c_sw0>;
+				hpd-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>;
+				pinctrl-names = "default";
+				pinctrl-0 = <&pinctrl_gpio_hpd>;
+				reg = <0x48>;
+
+				port {
+					lt8912_1_in: endpoint {
+						remote-endpoint = <&mipi_dsi_bridge1_out>;
+					};
+				};
+			};
+		};
+	};
+};
+
+&iomuxc {
+	pinctrl-names = "default";
+
+	colibri-imx8qxp {
+		/* DSI/LVDS Hot Plug Detect on FFC (X2) */
+		pinctrl_gpio_hpd: gpio-hpd {
+			fsl,pins = <
+				SC_P_MIPI_DSI1_GPIO0_00_LSIO_GPIO1_IO31		0x20		/* SODIMM 138 */
+			>;
+		};
+	};
+};
+
+&ldb1_phy {
+	status = "disabled";
+};
+
+&ldb1 {
+	status = "disabled";
+
+	lvds-channel@0 {
+		fsl,data-mapping = "jeida";
+		fsl,data-width = <24>;
+		status = "disabled";
+	};
+};
+
+&ldb2 {
+	status = "okay";
+};
+
+&ldb2_phy {
+	status = "okay";
+};
+
+&mipi_dsi_phy1 {
+	status = "okay";
+};
+
+&mipi_dsi1 {
+	status = "okay";
+};
+
+&mipi_dsi_bridge1 {
+	status = "okay";
+
+	port@1 {
+		mipi_dsi_bridge1_out: endpoint {
+			remote-endpoint = <&lt8912_1_in>;
+		};
+	};
+};
+
+&pixel_combiner {
+	status = "okay";
+};
+
+&prg1 {
+	status = "okay";
+};
+
+&prg2 {
+	status = "okay";
+};
+
+&prg3 {
+	status = "okay";
+};
+
+&prg4 {
+	status = "okay";
+};
+
+&prg5 {
+	status = "okay";
+};
+
+&prg6 {
+	status = "okay";
+};
+
+&prg7 {
+	status = "okay";
+};
+
+&prg8 {
+	status = "okay";
+};
+
+&prg9 {
+	status = "okay";
+};

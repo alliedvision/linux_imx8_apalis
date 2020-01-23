@@ -1,0 +1,372 @@
+// SPDX-License-Identifier: GPL-2.0+ OR X11
+/*
+ * Copyright 2019 Toradex
+ */
+
+/ {
+	aliases {
+		rtc0 = &rtc_i2c;
+		rtc1 = &rtc;
+	};
+
+	display-subsystem {
+		status = "okay";
+	};
+
+	/* Apalis WAKE1_MICO */
+	gpio-keys {
+		compatible = "gpio-keys";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gpio_keys>;
+
+		wakeup {
+			label = "Wake-Up";
+			gpios = <&gpio0 3 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_WAKEUP>;
+			debounce-interval = <10>;
+			wakeup-source;
+		};
+	};
+
+	reg_3v3: regulator-3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "3.3V";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+	};
+
+	reg_5v0: regulator-5v0 {
+		compatible = "regulator-fixed";
+		regulator-name = "5V";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+	};
+
+	reg_usb_otg1_vbus: regulator@0 {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_usbo1_en>;
+		regulator-name = "usb_otg1_vbus";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		/* Apalis USBO1_EN */
+		gpio = <&gpio3 16 GPIO_ACTIVE_HIGH>;
+	};
+
+	reg_usb_host_vbus: regulator-usb-host-vbus {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_usbh_en>;
+		regulator-name = "usb_host_vbus_hub";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		/* Apalis USBH_EN */
+		gpio = <&gpio4 4 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+/* Apalis Parallel RGB */
+&adma_lcdif {
+	status = "okay";
+};
+
+&atmel_mxt_ts {
+	status = "okay";
+};
+
+&backlight {
+	brightness-levels = <0 45 63 88 119 158 203 255>;
+	default-brightness-level = <4>;
+	pwms = <&pwm_mipi_lvds1 0 6666667 PWM_POLARITY_INVERTED>;
+	status= "okay";
+};
+
+/* Display Prefetch Resolve, (Tiling) */
+&dpr1_channel1 {
+	status = "okay";
+};
+
+&dpr1_channel2 {
+	status = "okay";
+};
+
+&dpr1_channel3 {
+	status = "okay";
+};
+
+&dpr2_channel1 {
+	status = "okay";
+};
+
+&dpr2_channel2 {
+	status = "okay";
+};
+
+&dpr2_channel3 {
+	status = "okay";
+};
+
+&dpu1 {
+	status = "okay";
+};
+
+&fec1 {
+	status = "okay";
+};
+
+/* Apalis CAN2 */
+&flexcan2 {
+	/* define the following property to disable CAN-FD mode */
+	/* disable-fd-mode; */
+/* Todo:	xceiver-supply = <&reg_can_stby>; */
+};
+
+/* Apalis CAN1 */
+&flexcan1 {
+	/* define the following property to disable CAN-FD mode */
+	/* disable-fd-mode; */
+/* Todo:	xceiver-supply = <&reg_can_stby>; */
+};
+
+&gpu_3d0 {
+	status = "okay";
+};
+
+/* Apalis I2C1 */
+&i2c1 {
+	status = "okay";
+
+	/* M41T0M6 real time clock on carrier board */
+	rtc_i2c: rtc@68 {
+		compatible = "st,m41t0";
+		reg = <0x68>;
+	};
+};
+
+/* Apalis I2C2 (DDC) */
+&i2c0_mipi_lvds1 {
+	status = "okay";
+};
+
+/* Apalis I2C3 (CAM) */
+&i2c3 {
+	status = "okay";
+#if 0 /* Todo */
+	ov5640_mipi: ov5640_mipi@3c {
+		compatible = "ovti,ov5640_mipi_v3";
+		clocks = <&clk IMX8QXP_24MHZ>;
+		clock-names = "csi_mclk";
+		csi_id = <0>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		mipi_csi;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gpio12>;
+		pwn-gpios = <&gpio3 22 GPIO_ACTIVE_HIGH>;
+		reg = <0x3c>;
+		rst-gpios = <&gpio3 21 GPIO_ACTIVE_LOW>;
+		status = "okay";
+
+		port {
+			ov5640_ep: endpoint {
+				remote-endpoint = <&parallel_csi_ep>;
+			};
+		};
+	};
+#endif
+};
+
+&imx8_gpu_ss {
+	status = "okay";
+};
+
+&ldb1 {
+	status = "okay";
+};
+
+&ldb1_phy {
+	status = "okay";
+};
+
+&ldb2 {
+	status = "okay";
+};
+
+&ldb2_phy {
+	status = "okay";
+};
+
+/* Apalis SPI1 */
+&lpspi0 {
+	status = "okay";
+
+	spidev0: spi@0 {
+		compatible = "toradex,evalspi";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+	};
+};
+
+/* Apalis SPI2 */
+&lpspi2 {
+	status = "okay";
+
+	spidev1: spi@0 {
+		compatible = "toradex,evalspi";
+		reg = <0>;
+		spi-max-frequency = <4000000>;
+	};
+};
+
+/* Apalis UART1 */
+&lpuart1 {
+	status = "okay";
+};
+/*
+&mipi_dsi1 {
+	status = "okay";
+};
+
+&mipi_dsi_phy1 {
+	status = "okay";
+};
+
+&mipi_dsi_bridge1 {
+	status = "okay";
+};
+*/
+&mipi_dsi2 {
+	status = "okay";
+};
+
+&mipi_dsi_phy2 {
+	status = "okay";
+};
+
+&mipi_dsi_bridge2 {
+	status = "okay";
+};
+
+/* Todo: copied from mek and put some things in... */
+&parallel_csi {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	status = "okay";
+#if 0 /* Todo */
+	port@1 {
+		reg = <1>;
+
+		parallel_csi_ep: endpoint {
+			data-lanes = <1 2>;
+			remote-endpoint = <&ov5640_ep>;
+		};
+	};
+#endif
+};
+
+/* On-module GPIO Expander */
+&pcal6416_1 {
+	/*
+	 * This gpio-hog drives a muxing device. With that we can choose
+	 * if LVDS1_B pins are active or if DVI signals are active. Those
+	 * signals are then muxed to MIPI_DSI1 PADs.
+	 *
+	 * output-high; muxes to DVI signals
+	 * output-low; muxes to LVDS1_B signals
+	 */
+	LVDS_HDMI_MUX {
+		gpio-hog;
+		gpios = <14 0>;
+		output-high;
+		line-name = "LVDS_HDMI_MUX";
+	};
+};
+
+&pixel_combiner {
+	status = "okay";
+};
+
+&prg1 {
+	status = "okay";
+};
+
+&prg2 {
+	status = "okay";
+};
+
+&prg3 {
+	status = "okay";
+};
+
+&prg4 {
+	status = "okay";
+};
+
+&prg5 {
+	status = "okay";
+};
+
+&prg6 {
+	status = "okay";
+};
+
+&prg7 {
+	status = "okay";
+};
+
+&prg8 {
+	status = "okay";
+};
+
+&prg9 {
+	status = "okay";
+};
+
+/* Apalis BKL1_PWM */
+&pwm_mipi_lvds1 {
+	status = "okay";
+};
+
+/* Apalis PWM1 */
+&pwm2 {
+	status = "okay";
+};
+
+/* Apalis PWM2 */
+&pwm_mipi_lvds0 {
+	status = "okay";
+};
+
+/* Apalis USBO1 */
+&usbotg1 {
+	vbus-supply = <&reg_usb_otg1_vbus>;
+	srp-disable;
+	hnp-disable;
+	adp-disable;
+	disable-over-current;
+	status = "okay";
+};
+
+&usbotg3 {
+	dr_mode = "host";
+	vbus-regulator = <&reg_usb_host_vbus>;
+	status = "okay";
+};
+
+/* Apalis MMC1 */
+&usdhc2 {
+	status = "okay";
+};
+
+&vpu {
+	status = "okay";
+};
+
+&vpu_decoder {
+	status = "okay";
+};
+
+&vpu_encoder {
+	status = "okay";
+};

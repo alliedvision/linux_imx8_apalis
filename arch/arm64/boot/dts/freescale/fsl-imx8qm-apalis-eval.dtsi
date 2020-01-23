@@ -1,0 +1,469 @@
+// SPDX-License-Identifier: GPL-2.0+ OR X11
+/*
+ * Copyright 2019 Toradex
+ */
+
+/ {
+	aliases {
+		rtc0 = &rtc_i2c;
+		rtc1 = &rtc;
+	};
+
+	/* Apalis WAKE1_MICO */
+	gpio-keys {
+		compatible = "gpio-keys";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gpio_keys>;
+
+		wakeup {
+			label = "Wake-Up";
+			gpios = <&gpio2 20 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_WAKEUP>;
+			debounce-interval = <10>;
+			wakeup-source;
+		};
+	};
+
+	reg_usb_host_vbus: regulator-usb-host-vbus {
+		compatible = "regulator-fixed";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_usbh_en>;
+		regulator-name = "VCC_USBH(2A|2C|2D|3|4)";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		enable-active-high;
+		/* Apalis USBH_EN */
+		gpio = <&gpio4 4 GPIO_ACTIVE_HIGH>;
+	};
+};
+
+&acm {
+	status = "okay";
+};
+
+&adc0 {
+	status = "okay";
+};
+
+&adc1 {
+	status = "okay";
+};
+
+&amix {
+	status = "okay";
+};
+
+&asrc0 {
+	status = "okay";
+};
+
+&backlight {
+	default-brightness-level = <4>;
+	brightness-levels = <0 45 63 88 119 158 203 255>;
+	pwms = <&lvds1_pwm 0 6666667 PWM_POLARITY_INVERTED>;
+	status = "okay";
+};
+
+&dpr1_channel1 {
+	status = "okay";
+};
+
+&dpr1_channel2 {
+	status = "okay";
+};
+
+&dpr1_channel3 {
+	status = "okay";
+};
+
+&dpr2_channel1 {
+	status = "okay";
+};
+
+&dpr2_channel2 {
+	status = "okay";
+};
+
+&dpr2_channel3 {
+	status = "okay";
+};
+
+&dpr3_channel1 {
+	status = "okay";
+};
+
+&dpr3_channel2 {
+	status = "okay";
+};
+
+&dpr3_channel3 {
+	status = "okay";
+};
+
+&dpr4_channel1 {
+	status = "okay";
+};
+
+&dpr4_channel2 {
+	status = "okay";
+};
+
+&dpr4_channel3 {
+	status = "okay";
+};
+
+&dpu1 {
+	status = "okay";
+};
+
+&dpu2 {
+	status = "okay";
+};
+
+&fec1 {
+	status = "okay";
+};
+
+&flexcan1 {
+	status = "okay";
+};
+
+&flexcan2 {
+	status = "okay";
+};
+
+&gpu_3d0 {
+	status = "okay";
+};
+
+&gpu_3d1 {
+	status = "okay";
+};
+
+&hdmi {
+	status = "okay";
+};
+
+/* Apalis I2C2 (DDC) */
+&i2c0 {
+	status = "okay";
+};
+
+/* Apalis I2C1 */
+&i2c2 {
+	status = "okay";
+
+	/* M41T0M6 real time clock on carrier board */
+	rtc_i2c: rtc@68 {
+		compatible = "st,m41t0";
+		reg = <0x68>;
+	};
+
+	atmel_mxt_ts: atmel_mxt_ts@4a {
+		compatible = "atmel,maxtouch";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_touch>;
+		reg = <0x4a>;
+		interrupt-parent = <&gpio4>;
+		interrupts = <1 IRQ_TYPE_EDGE_FALLING>;    /* Apalis GPIO5 */
+		reset-gpios = <&gpio4 2 GPIO_ACTIVE_HIGH>; /* Apalis GPIO6 */
+		status = "okay";
+	};
+};
+
+/* Apalis I2C3 (CAM) */
+&i2c3 {
+	status = "okay";
+
+	ov5640_mipi: ov5640_mipi@3c {
+		compatible = "ovti,ov5640_mipi_v3";
+		clocks = <&clk IMX8QM_24MHZ>;
+		clock-names = "csi_mclk";
+		csi_id = <1>;
+		mclk = <24000000>;
+		mclk_source = <0>;
+		mipi_csi;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gpio12>;
+		pwn-gpios = <&gpio0 9 GPIO_ACTIVE_HIGH>;
+		reg = <0x3c>;
+		rst-gpios = <&gpio0 8 GPIO_ACTIVE_LOW>;
+		status = "okay";
+
+		port {
+			ov5640_ep: endpoint {
+				remote-endpoint = <&mipi_csi1_ep>;
+			};
+		};
+	};
+};
+
+&imx8_gpu_ss {
+	status = "okay";
+};
+
+&intmux_cm40 {
+	status = "okay";
+};
+
+&intmux_cm41 {
+	status = "okay";
+};
+
+&irqsteer_hdmi {
+	status = "okay";
+};
+
+&isi_0 {
+	status = "okay";
+};
+
+&isi_1 {
+	status = "okay";
+};
+
+&isi_2 {
+	status = "okay";
+};
+
+&isi_3 {
+	status = "okay";
+};
+
+&isi_4 {
+	status = "okay";
+};
+
+&isi_5 {
+	status = "okay";
+};
+
+&isi_6 {
+	status = "okay";
+};
+
+&isi_7 {
+	status = "okay";
+};
+
+&ldb2_phy {
+	status = "okay";
+};
+
+/* Apalis SPI1 */
+&lpspi0 {
+	status = "okay";
+};
+
+/* Apalis SPI2 */
+&lpspi2 {
+	status = "okay";
+};
+
+/* Apalis UART3 */
+&lpuart0 {
+	status = "okay";
+};
+
+/* Apalis UART1 */
+&lpuart1 {
+	status = "okay";
+};
+
+/* Apalis UART4 */
+&lpuart2 {
+	status = "okay";
+};
+
+/* Apalis UART2 */
+&lpuart3 {
+	status = "okay";
+};
+
+/* Apalis BKL1_PWM */
+&lvds1_pwm {
+	status = "okay";
+};
+
+&mipi_csi_1 {
+	status = "okay";
+};
+
+/* Apalis PCIE1 */
+&pciea{
+	status = "okay";
+};
+
+&pixel_combiner1 {
+	status = "okay";
+};
+
+&pixel_combiner2 {
+	status = "okay";
+};
+
+&prg1 {
+	status = "okay";
+};
+
+&prg2 {
+	status = "okay";
+};
+
+&prg3 {
+	status = "okay";
+};
+
+&prg4 {
+	status = "okay";
+};
+
+&prg5 {
+	status = "okay";
+};
+
+&prg6 {
+	status = "okay";
+};
+
+&prg7 {
+	status = "okay";
+};
+
+&prg8 {
+	status = "okay";
+};
+
+&prg9 {
+	status = "okay";
+};
+
+&prg10 {
+	status = "okay";
+};
+
+&prg11 {
+	status = "okay";
+};
+
+&prg12 {
+	status = "okay";
+};
+
+&prg13 {
+	status = "okay";
+};
+
+&prg14 {
+	status = "okay";
+};
+
+&prg15 {
+	status = "okay";
+};
+
+&prg16 {
+	status = "okay";
+};
+
+&prg17 {
+	status = "okay";
+};
+
+&prg18 {
+	status = "okay";
+};
+
+/* Apalis PWM3, MXM3 pin 6 */
+&pwm0 {
+	status = "okay";
+};
+
+/* Apalis PWM4, MXM3 pin 8 */
+&pwm1 {
+	status = "okay";
+};
+
+/* Apalis PWM1, MXM3 pin 2 */
+&pwm2 {
+	status = "okay";
+};
+
+/* Apalis PWM2, MXM3 pin 4 */
+&pwm3 {
+	status = "okay";
+};
+
+&rpmsg {
+	status = "okay";
+};
+
+&rpmsg1 {
+	status = "okay";
+};
+
+&sai1 {
+	status = "okay";
+};
+
+&sai6 {
+	status = "okay";
+};
+
+&sai7 {
+	status = "okay";
+};
+
+&sai_hdmi_tx {
+	status = "okay";
+};
+
+/* Apalis SATA1 */
+&sata {
+	status = "okay";
+};
+
+/* Apalis SPDIF1 */
+&spdif0 {
+	status = "okay";
+};
+
+&spdif1 {
+	status = "okay";
+};
+
+/* Apalis USBH2, Apalis USBH3 and on-module Wi-Fi via on-module HSIC Hub */
+&usbh1 {
+	vbus-supply = <&reg_usb_host_vbus>;
+	status = "okay";
+};
+
+/* Apalis USBO1 */
+&usbotg1 {
+	status = "okay";
+};
+
+/* Apalis USBH4 SuperSpeed */
+&usbotg3 {
+	dr_mode = "host";
+	vbus-supply = <&reg_usb_host_vbus>;
+	status = "okay";
+};
+
+/* Apalis MMC1 */
+&usdhc2 {
+	status = "okay";
+};
+
+/* Apalis SD1 */
+&usdhc3 {
+	status = "okay";
+};
+
+&vpu_decoder {
+	status = "okay";
+};
+
+&vpu_encoder {
+	status = "okay";
+};

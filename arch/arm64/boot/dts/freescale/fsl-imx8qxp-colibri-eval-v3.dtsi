@@ -1,0 +1,197 @@
+// SPDX-License-Identifier: GPL-2.0+ OR X11
+/*
+ * Copyright 2018-2019 Toradex
+ */
+
+/ {
+	aliases {
+		rtc0 = &rtc_i2c;
+		rtc1 = &rtc;
+	};
+
+	/* fixed crystal dedicated to mpc25xx */
+	clk16m: clk16m {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <16000000>;
+	};
+
+	display-subsystem {
+		status = "okay";
+	};
+
+	extcon_usbc_det: usbc_det {
+		compatible = "linux,extcon-usb-gpio";
+		debounce = <25>;
+		id-gpio = <&gpio5 9 GPIO_ACTIVE_HIGH>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_usbc_det>;
+	};
+
+	gpio-keys {
+		compatible = "gpio-keys";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gpiokeys>;
+
+		wakeup {
+			label = "Wake-Up";
+			gpios = <&gpio3 10 GPIO_ACTIVE_HIGH>;
+			linux,code = <KEY_WAKEUP>;
+			debounce-interval = <10>;
+			wakeup-source;
+		};
+	};
+
+	regulators {
+		reg_3v3: regulator-3v3 {
+			compatible = "regulator-fixed";
+			regulator-name = "3.3V";
+			regulator-min-microvolt = <3300000>;
+			regulator-max-microvolt = <3300000>;
+		};
+
+		reg_5v0: regulator-5v0 {
+			compatible = "regulator-fixed";
+			regulator-name = "5V";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+		};
+
+		reg_usbh_vbus: regulator-usbh-vbus {
+			compatible = "regulator-fixed";
+			pinctrl-names = "default";
+			pinctrl-0 = <&pinctrl_usbh1_reg>;
+			regulator-name = "usbh_vbus";
+			regulator-min-microvolt = <5000000>;
+			regulator-max-microvolt = <5000000>;
+			gpio = <&gpio4 3 GPIO_ACTIVE_LOW>;
+			regulator-always-on;
+		};
+	};
+};
+
+/* Colibri Analogue Inputs */
+&adc0 {
+	status = "okay";
+};
+
+&dpu1 {
+	status = "okay";
+};
+
+/* Colibri Ethernet */
+&fec1 {
+	status = "okay";
+};
+
+&gpu_3d0 {
+	status = "okay";
+};
+
+&i2c1 {
+	status = "okay";
+
+	/* M41T0M6 real time clock on carrier board */
+	rtc_i2c: rtc@68 {
+		compatible = "st,m41t0";
+		reg = <0x68>;
+	};
+};
+
+&imx8_gpu_ss {
+	status = "okay";
+};
+
+/* Colibri SPI */
+&lpspi2 {
+	status = "okay";
+
+	mcp2515: can@0 {
+		compatible = "microchip,mcp2515";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_can_int>;
+		reg = <0>;
+		clocks = <&clk16m>;
+		interrupt-parent = <&gpio3>;
+		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
+		spi-max-frequency = <10000000>;
+		vdd-supply = <&reg_3v3>;
+		xceiver-supply = <&reg_5v0>;
+		status = "okay";
+	};
+
+	spidev0: spidev@0 {
+		compatible = "toradex,evalspi";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+		status = "disabled";
+	};
+};
+
+/* Colibri UART_B */
+&lpuart0 {
+	status = "okay";
+};
+
+/* Colibri UART_C */
+&lpuart2 {
+	status = "okay";
+};
+
+/* Colibri UART_A */
+&lpuart3 {
+	status= "okay";
+};
+
+/* Colibri PWM_A */
+&pwm_adma_lcdif {
+	status = "okay";
+};
+
+/* Colibri PWM_B */
+&pwm0 {
+	status = "okay";
+};
+
+/* Colibri PWM_C */
+&pwm1 {
+	status = "okay";
+};
+
+/* Colibri PWM_D */
+&pwm2 {
+	status = "okay";
+};
+
+&usbotg1 {
+	extcon = <&extcon_usbc_det &extcon_usbc_det>;
+	vbus-supply = <&reg_usbh_vbus>;
+	srp-disable;
+	hnp-disable;
+	adp-disable;
+	power-polarity-active-high;
+	disable-over-current;
+	status = "okay";
+};
+
+&usbotg3 {
+	dr_mode = "host";
+	status = "okay";
+};
+
+/* Colibri SDCard */
+&usdhc2 {
+	status = "okay";
+};
+
+&vpu {
+	status = "okay";
+};
+
+&vpu_decoder {
+	status = "okay";
+};
+
+&vpu_encoder {
+	status = "okay";
+};

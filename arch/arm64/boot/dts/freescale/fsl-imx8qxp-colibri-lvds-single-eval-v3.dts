@@ -1,0 +1,222 @@
+// SPDX-License-Identifier: GPL-2.0+ OR X11
+/*
+ * Copyright 2018-2019 Toradex
+ */
+
+/dts-v1/;
+
+#include "dt-bindings/pwm/pwm.h"
+#include "fsl-imx8qxp-colibri.dtsi"
+#include "fsl-imx8qxp-colibri-eval-v3.dtsi"
+
+/ {
+	model = "Toradex Colibri iMX8QXP/DX with single channel lvds";
+	compatible = "toradex,colibri-imx8qxp-lvds-single-eval-v3", "toradex,colibri-imx8qxp", "fsl,imx8qxp";
+
+	lvds1_panel {
+		compatible = "logictechno,lt170410-2whc";
+		backlight = <&backlight>;
+
+		port {
+			panel_lvds1_in: endpoint {
+				remote-endpoint = <&lvds1_out>;
+			};
+		};
+	};
+};
+
+/* Colibri Parallel RGB */
+&adma_lcdif {
+	status = "disabled";
+};
+
+/*
+ * Atmel maxtouch controller
+ * To enable it, you should disable pwm0 (PWM_B) and pwm1 (PWM_C)
+ */
+&atmel_mxt_ts {
+        pinctrl-0 = <&pinctrl_touch>;
+        interrupt-parent = <&gpio0>;
+        interrupts = <21 IRQ_TYPE_EDGE_FALLING>;        /* SODIMM 28 */
+        reset-gpios = <&gpio0 22 GPIO_ACTIVE_HIGH>;     /* SODIMM 30 */
+	status = "okay";
+};
+
+&backlight {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gpio_bklght_on>;
+	brightness-levels = <0 45 63 88 119 158 203 255>;
+	default-brightness-level = <4>;
+	enable-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>; /* Ext.Conn 25: LVDS1_GPIO0_00 */
+	pwms = <&pwm_adma_lcdif 0 6666667 PWM_POLARITY_INVERTED>;
+	status = "okay";
+};
+
+/* Display Prefetch Resolve, (Tiling) */
+&dpr1_channel1 {
+	status = "okay";
+};
+
+&dpr1_channel2 {
+	status = "okay";
+};
+
+&dpr1_channel3 {
+	status = "okay";
+};
+
+&dpr2_channel1 {
+	status = "okay";
+};
+
+&dpr2_channel2 {
+	status = "okay";
+};
+
+&dpr2_channel3 {
+	status = "okay";
+};
+
+&dpu1 {
+	status = "okay";
+};
+
+&gpu_3d0 {
+	status = "okay";
+};
+
+&imx8_gpu_ss {
+	status = "okay";
+};
+
+&iomuxc {
+	pinctrl-names = "default";
+
+	colibri-imx8qxp {
+		pinctrl_touch: touchgrp {
+			fsl,pins = <
+				SC_P_UART1_TX_LSIO_GPIO0_IO21	0x06000040	/* SODIMM  28 */
+				SC_P_UART1_RX_LSIO_GPIO0_IO22	0x06000020	/* SODIMM  30 */
+			>;
+		};
+
+		pinctrl_gpio_bklght_on: gpio-bl-on {
+			fsl,pins = <
+				SC_P_MIPI_DSI1_GPIO0_00_LSIO_GPIO1_IO31		0x00000020
+			>;
+		};
+	};
+};
+
+&ldb1_phy {
+	status = "okay";
+};
+
+&ldb1 {
+	status = "okay";
+
+	lvds-channel@0 {
+		fsl,data-mapping = "spwg";
+		fsl,data-width = <24>; /* Actually would need 18 but isn't supported by the driver */
+		status = "okay";
+
+		port@1 {
+			reg = <1>;
+
+			lvds1_out: endpoint {
+				remote-endpoint = <&panel_lvds1_in>;
+			};
+		};
+	};
+};
+
+&mipi_dsi_phy1 {
+	status = "okay";
+};
+
+&mipi_dsi1 {
+	status = "okay";
+};
+
+&mipi_dsi_bridge1 {
+	status = "disabled";
+};
+
+/* On-module MIPI DSI accessible on FFC (X2) */
+&i2c0_mipi_lvds1 {
+	status = "disabled";
+};
+
+&ldb2_phy {
+	status = "disabled";
+};
+
+&ldb2 {
+	status = "disabled";
+};
+
+&mipi_dsi_phy2 {
+	status = "disabled";
+};
+
+&mipi_dsi2 {
+	status = "disabled";
+};
+
+&mipi_dsi_bridge2 {
+	status = "disabled";
+};
+
+&i2c1 {
+	status = "okay";
+};
+
+&pixel_combiner {
+	status = "okay";
+};
+
+&prg1 {
+	status = "okay";
+};
+
+&prg2 {
+	status = "okay";
+};
+
+&prg3 {
+	status = "okay";
+};
+
+&prg4 {
+	status = "okay";
+};
+
+&prg5 {
+	status = "okay";
+};
+
+&prg6 {
+	status = "okay";
+};
+
+&prg7 {
+	status = "okay";
+};
+
+&prg8 {
+	status = "okay";
+};
+
+&prg9 {
+	status = "okay";
+};
+
+/* Colibri PWM_B */
+&pwm0 {
+	status = "disabled";
+};
+
+/* Colibri PWM_C */
+&pwm1 {
+	status = "disabled";
+};

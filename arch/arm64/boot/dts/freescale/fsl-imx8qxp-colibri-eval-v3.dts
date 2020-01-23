@@ -1,0 +1,14 @@
+// SPDX-License-Identifier: GPL-2.0+ OR X11
+/*
+ * Copyright 2018-2019 Toradex
+ */
+
+/dts-v1/;
+
+#include "fsl-imx8qxp-colibri.dtsi"
+#include "fsl-imx8qxp-colibri-eval-v3.dtsi"
+
+/ {
+	model = "Toradex Colibri iMX8QXP/DX on Colibri Evaluation Board V3";
+	compatible = "toradex,colibri-imx8qxp-eval-v3", "toradex,colibri-imx8qxp", "fsl,imx8qxp";
+};

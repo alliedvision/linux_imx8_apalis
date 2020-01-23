@@ -1,0 +1,1035 @@
+// SPDX-License-Identifier: GPL-2.0+ OR X11
+/*
+ * Copyright 2018-2019 Toradex
+ */
+
+#include <dt-bindings/gpio/gpio.h>
+#include "dt-bindings/pwm/pwm.h"
+#include "fsl-imx8qxp.dtsi"
+
+/ {
+	model = "Toradex Apalis iMX8QXP/DX Module";
+	compatible = "toradex,apalis-imx8x", "fsl,imx8qxp";
+
+	backlight: backlight {
+		compatible = "pwm-backlight";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_gpio_bkl_on>;
+		enable-gpios = <&gpio3 13 GPIO_ACTIVE_HIGH>;
+		status = "disabled";
+	};
+
+	chosen {
+		stdout-path = &lpuart1;
+	};
+
+	panel_1: panel-1 {
+		/*
+		 * edt,et057090dhu: EDT 5.7" LCD TFT
+		 * edt,et070080dh6: EDT 7.0" LCD TFT
+		 * logictechno,lt161010-2nhc: Cap. Touch Display 7" Parallel
+		 * logictechno,lt161010-2nhr: Res. Touch Display 7" Parallel
+		 * logictechno,lt170410-2whc: Cap. Touch Display 10.1" LVDS
+		 * tpk,f07a-0102: Capacitive Multi-Touch Display Fusion 7"
+		 * tpk,f10a-0102: Capacitive Multi-Touch Display Fusion 10"
+		 */
+		compatible = "panel-dpi";
+		backlight = <&backlight>;
+		power-supply = <&reg_3v3>;
+
+		width-mm = <217>;
+		height-mm = <136>;
+
+		data-mapping = "bgr666";
+
+		panel-timing {
+			/* Default VESA VGA display timings */
+			clock-frequency = <25175000>;
+			hactive = <640>;
+			hback-porch = <48>;
+			hfront-porch = <16>;
+			hsync-len = <96>;
+			vactive = <480>;
+			vback-porch = <31>;
+			vfront-porch = <11>;
+			vsync-len = <2>;
+			pixelclk-active = <0>;
+		};
+
+		port {
+			lcd_panel1_in: endpoint {
+				remote-endpoint = <&lcd_display_out>;
+			};
+		};
+	};
+
+	panel_2: panel-2 {
+		compatible = "logictechno,lt170410-2whc";
+		backlight = <&backlight>;
+
+		port {
+			lcd_panel2_in: endpoint {
+				remote-endpoint = <&lvds1_out>;
+			};
+		};
+	};
+
+	reg_module_3v3: regulator-module-3v3 {
+		compatible = "regulator-fixed";
+		regulator-name = "+V3.3";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+	};
+
+	reg_module_3v3_avdd: regulator-module-3v3-avdd {
+		compatible = "regulator-fixed";
+		regulator-name = "+V3.3_AVDD_AUDIO";
+		regulator-min-microvolt = <3300000>;
+		regulator-max-microvolt = <3300000>;
+	};
+
+	reg_vref_1v8: regulator-vref-1v8 {
+		compatible = "regulator-fixed";
+		regulator-name = "vref-1v8";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+	};
+
+	/* TBD SPDIF, HDMI audio */
+
+	sound {
+		compatible = "simple-audio-card";
+		simple-audio-card,name = "imx8qxp-sgtl5000";
+		simple-audio-card,format = "i2s";
+		simple-audio-card,bitclock-master = <&dailink_master>;
+		simple-audio-card,frame-master = <&dailink_master>;
+
+		simple-audio-card,cpu {
+			sound-dai = <&sai1>;
+		};
+
+		dailink_master: simple-audio-card,codec {
+			sound-dai = <&sgtl5000>;
+			clocks = <&clk IMX8QXP_AUD_MCLKOUT0>;
+		};
+	};
+};
+
+/* Apalis AN1_ADC */
+&adc0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_adc0>;
+	vref-supply = <&reg_vref_1v8>;
+};
+
+/* Apalis Parallel RGB */
+&adma_lcdif {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lcdif>;
+	bus-width = <18>;
+	status = "disabled";
+
+	port@0 {
+		lcd_display_out: lcdif-endpoint {
+			remote-endpoint = <&lcd_panel1_in>;
+		};
+	};
+};
+
+/* Apalis Gigabit Ethernet */
+&fec1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_fec1>;
+	fsl,magic-packet;
+	fsl,rgmii_rxc_dly;
+	fsl,rgmii_txc_dly;
+	phy-handle = <&ethphy0>;
+	phy-mode = "rgmii";
+	phy-reset-duration = <10>;
+	phy-reset-post-delay = <200>;
+	phy-reset-gpios = <&gpio3 4 GPIO_ACTIVE_LOW>;
+
+	mdio {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		ethphy0: ethernet-phy@4 {
+			compatible = "ethernet-phy-ieee802.3-c22";
+			interrupt-parent = <&gpio1>;
+			interrupts = <12 IRQ_TYPE_LEVEL_LOW>;
+			reg = <4>;
+			micrel,led-mode = <0>;
+		};
+	};
+};
+
+/* Apalis CAN1 */
+&flexcan1 {
+	/* define the following property to disable CAN-FD mode */
+	/* disable-fd-mode; */
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan1>;
+};
+
+/* Apalis CAN2 */
+&flexcan2 {
+	/* define the following property to disable CAN-FD mode */
+	/* disable-fd-mode; */
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_flexcan2>;
+};
+
+/* On-module I2C */
+&i2c0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c0>;
+	clock-frequency = <100000>;
+	status = "okay";
+
+	/* SGTL5000 Audio Codec */
+	sgtl5000: codec@a {
+		compatible = "fsl,sgtl5000";
+		#sound-dai-cells = <0>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_sgtl5000>;
+		reg = <0x0a>;
+		clocks = <&clk IMX8QXP_AUD_MCLKOUT0>;
+		assigned-clocks = <&clk IMX8QXP_AUD_PLL0_DIV>,
+				  <&clk IMX8QXP_AUD_ACM_AUD_PLL_CLK0_DIV>,
+				  <&clk IMX8QXP_AUD_ACM_AUD_REC_CLK0_DIV>,
+				  <&clk IMX8QXP_AUD_MCLKOUT0>;
+		assigned-clock-rates = <786432000>, <49152000>,
+					<12000000>, <12000000>;
+		power-domains = <&pd_mclk_out0>;
+		VDDA-supply = <&reg_module_3v3_avdd>;
+		VDDIO-supply = <&reg_module_3v3>;
+		VDDD-supply = <&reg_vref_1v8>;
+	};
+
+	/* PCAL6416A GPIO Expander */
+	pcal6416_1: gpio@20 {
+		compatible = "nxp,pcal6416";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_i2c_exp1_int>;
+		reg = <0x20>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-parent = <&gpio4>;
+		interrupts = <2 IRQ_TYPE_LEVEL_LOW>;
+		vcc-supply = <&reg_module_3v3>;
+	};
+
+	/* PCAL6416A GPIO Expander */
+	pcal6416_2: gpio@21 {
+		compatible = "nxp,pcal6416";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_i2c_exp2_int>;
+		reg = <0x21>;
+		gpio-controller;
+		#gpio-cells = <2>;
+		interrupt-parent = <&gpio4>;
+		interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
+		vcc-supply = <&reg_module_3v3>;
+	};
+
+	/* Touch controller */
+	ad7879@2c {
+		compatible = "adi,ad7879-1";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_ad7879_int>;
+		reg = <0x2c>;
+		interrupt-parent = <&gpio3>;
+		interrupts = <5 IRQ_TYPE_EDGE_FALLING>;
+		touchscreen-max-pressure = <4096>;
+		adi,resistance-plate-x = <120>;
+		adi,first-conversion-delay = /bits/ 8 <3>;
+		adi,acquisition-time = /bits/ 8 <1>;
+		adi,median-filter-size = /bits/ 8 <2>;
+		adi,averaging = /bits/ 8 <1>;
+		adi,conversion-interval = /bits/ 8 <255>;
+	};
+
+	/* LT8912B DSI to HDMI converter */
+	lt8912@48 {
+		compatible = "lontium,lt8912";
+		ddc-i2c-bus = <&i2c0_mipi_lvds1>;
+		hpd-gpios = <&pcal6416_1 15 GPIO_ACTIVE_HIGH>;
+		reg = <0x48>;
+
+		port {
+			lt8912_1_in: endpoint {
+				remote-endpoint = <&mipi_dsi_bridge2_out>;
+			};
+		};
+	};
+
+	/* On-Module EEPROM */
+	eeprom: eeprom@50 {
+		compatible = "atmel,24c02";
+		reg = <0x50>;
+		pagesize = <16>;
+	};
+};
+
+/* Apalis I2C1 */
+&i2c1 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c1>;
+	clock-frequency = <100000>;
+
+	/* Atmel maxtouch controller */
+	atmel_mxt_ts: atmel_mxt_ts@4a {
+		compatible = "atmel,maxtouch";
+		pinctrl-names = "default";
+		pinctrl-0 = <&pinctrl_touch>;
+		reg = <0x4a>;
+		interrupt-parent = <&gpio3>;
+		interrupts = <17 IRQ_TYPE_EDGE_FALLING>;    /* Apalis GPIO5 */
+		reset-gpios = <&gpio3 18 GPIO_ACTIVE_HIGH>; /* Apalis GPIO6 */
+                status = "disabled";
+        };
+};
+
+/* Apalis I2C2 (DDC) */
+&i2c0_mipi_lvds1 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_i2c0_mipi_lvds1>;
+	clock-frequency = <100000>;
+};
+
+/* Apalis I2C3 (CAM) */
+&i2c3 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpi2c3>;
+	clock-frequency = <100000>;
+};
+
+&iomuxc {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_gpio34>, <&pinctrl_gpio7>, <&pinctrl_usbo1oc>,
+		    <&pinctrl_gpio8>, <&pinctrl_qspi0a_gpios>,
+		    <&pinctrl_sata1_act>, <&pinctrl_reset_moci>,
+		    <&pinctrl_mmc1_gpios>, <&pinctrl_dap1_gpios>,
+		    <&pinctrl_parallel_csi>;
+
+	apalis-imx8qxp {
+		/* Apalis AN1_ADC */
+		pinctrl_adc0: adc0grp {
+			fsl,pins = <
+				/* Apalis AN1_ADC0 */
+				SC_P_ADC_IN0_ADMA_ADC_IN0			0x60		/* MXM3 305 */
+				/* Apalis AN1_ADC1 */
+				SC_P_ADC_IN1_ADMA_ADC_IN1			0x60		/* MXM3 307 */
+				/* Apalis AN1_ADC2 */
+				SC_P_ADC_IN2_ADMA_ADC_IN2			0x60		/* MXM3 309 */
+				/* Apalis AN1_TSWIP_ADC3 */
+				SC_P_ADC_IN3_ADMA_ADC_IN3			0x60		/* MXM3 311 */
+			>;
+		};
+
+		/* Apalis BKL1_ON */
+		pinctrl_gpio_bkl_on: gpio-bkl-on {
+			fsl,pins = <
+				SC_P_QSPI0A_DQS_LSIO_GPIO3_IO13			0x21		/* MXM3 286 */
+			>;
+		};
+
+		/* Apalis BKL1_PWM */
+		pinctrl_pwm_mipi_lvds1: pwmmipilvds1grp {
+			fsl,pins = <
+				SC_P_MIPI_DSI1_GPIO0_00_MIPI_DSI1_PWM0_OUT	0x60		/* MXM3 239 */
+			>;
+		};
+
+		/* Apalis CAN1 */
+		pinctrl_flexcan1: flexcan0grp {
+			fsl,pins = <
+				SC_P_FLEXCAN1_TX_ADMA_FLEXCAN1_TX		0x21		/* MXM3 14 */
+				SC_P_FLEXCAN1_RX_ADMA_FLEXCAN1_RX		0x21		/* MXM3 12 */
+			>;
+		};
+
+		/* Apalis CAN2 */
+		pinctrl_flexcan2: flexcan1grp {
+			fsl,pins = <
+				SC_P_FLEXCAN2_TX_ADMA_FLEXCAN2_TX		0x21		/* MXM3 18 */
+				SC_P_FLEXCAN2_RX_ADMA_FLEXCAN2_RX		0x21		/* MXM3 16 */
+			>;
+		};
+
+		/* Apalis DAP1 */
+		pinctrl_dap1_gpios: dap1gpiosgrp {
+			fsl,pins = <
+				/* Apalis DAP1_D_OUT */
+				SC_P_SAI0_TXD_LSIO_GPIO0_IO25			0x21		/* MXM3 196 */
+				/* Apalis DAP1_RESET */
+				SC_P_QSPI0A_SS1_B_LSIO_GPIO3_IO15		0x21		/* MXM3 198 */
+				/* Apalis DAP1_BIT_CLK */
+				SC_P_SAI0_TXC_LSIO_GPIO0_IO26			0x21		/* MXM3 200 */
+				/* Apalis DAP1_D_IN */
+				SC_P_SAI0_RXD_LSIO_GPIO0_IO27			0x21		/* MXM3 202 */
+				/* Apalis DAP1_SYNC */
+				SC_P_SAI0_TXFS_LSIO_GPIO0_IO28			0x21		/* MXM3 204 */
+			>;
+		};
+
+		/* Apalis GPIO1+2 */
+		pinctrl_gpio12: gpio12grp {
+			fsl,pins = <
+				/* Apalis GPIO 1 */
+				SC_P_QSPI0B_DATA3_LSIO_GPIO3_IO21		0x21		/* MXM3 1 */
+				/* Apalis GPIO 2 */
+				SC_P_QSPI0B_DQS_LSIO_GPIO3_IO22			0x21		/* MXM3 3 */
+			>;
+		};
+
+		/* Apalis GPIO3+4 */
+		pinctrl_gpio34: gpio34grp {
+			fsl,pins = <
+				/* Apalis GPIO 3 */
+				SC_P_QSPI0B_SS0_B_LSIO_GPIO3_IO23		0x21		/* MXM3 5 */
+				/* Apalis GPIO 4 */
+				SC_P_QSPI0B_SS1_B_LSIO_GPIO3_IO24		0x21		/* MXM3 7 */
+			>;
+		};
+
+		/* Apalis GPIO5+6 */
+		pinctrl_touch: touchgrp {
+			fsl,pins = <
+				/* Apalis GPIO 5 */
+				SC_P_QSPI0B_SCLK_LSIO_GPIO3_IO17		0x21		/* MXM3 11 */
+				/* Apalis GPIO 6 */
+				SC_P_QSPI0B_DATA0_LSIO_GPIO3_IO18		0x21		/* MXM3 13 */
+			>;
+		};
+
+		/* Apalis GPIO7 */
+		pinctrl_gpio7: gpio7 {
+			fsl,pins = <
+				/* Apalis GPIO 7 */
+				SC_P_QSPI0B_DATA1_LSIO_GPIO3_IO19		0x21		/* MXM3 15 */
+			>;
+		};
+
+		/* Apalis GPIO8 */
+		pinctrl_gpio8: gpio8 {
+			fsl,pins = <
+				/* Apalis GPIO 8 */
+				SC_P_QSPI0B_DATA2_LSIO_GPIO3_IO20		0x21		/* MXM3 17 */
+			>;
+		};
+
+		/* Apalis I2C1 */
+		pinctrl_lpi2c1: lpi2c1grp {
+			fsl,pins = <
+				SC_P_USB_SS3_TC0_ADMA_I2C1_SCL			0x06000021	/* MXM3 211 */
+				SC_P_USB_SS3_TC3_ADMA_I2C1_SDA			0x06000021	/* MXM3 209 */
+			>;
+		};
+
+		/* Apalis I2C2 (DDC) */
+		pinctrl_i2c0_mipi_lvds1: mipilvds1i2c0grp {
+			fsl,pins = <
+				SC_P_MIPI_DSI1_I2C0_SCL_MIPI_DSI1_I2C0_SCL	0xc6000020	/* MXM3 205 */
+				SC_P_MIPI_DSI1_I2C0_SDA_MIPI_DSI1_I2C0_SDA	0xc6000020	/* MXM3 207 */
+			>;
+		};
+
+		/* Apalis I2C3 (CAM) */
+		pinctrl_lpi2c3: lpi2c3grp {
+			fsl,pins = <
+				SC_P_CSI_EN_ADMA_I2C3_SCL			0xc6000020	/* MXM3 203 */
+				SC_P_CSI_RESET_ADMA_I2C3_SDA			0xc6000020	/* MXM3 201 */
+			>;
+		};
+
+		/* Apalis MMC1_ */
+		pinctrl_mmc1_gpios: mmc1gpiosgrp {
+			fsl,pins = <
+				SC_P_QSPI0A_DATA1_LSIO_GPIO3_IO10		0x21		/* MXM3 148 */
+				SC_P_QSPI0A_SS0_B_LSIO_GPIO3_IO14		0x21		/* MXM3 158 */
+				SC_P_USDHC1_WP_LSIO_GPIO4_IO21			0x21		/* MXM3 156 */
+				SC_P_USDHC1_RESET_B_LSIO_GPIO4_IO19		0x21		/* MXM3 152 */
+			>;
+		};
+
+		/* Apalis MMC1_CD# */
+		pinctrl_usdhc2_gpio: mmc1gpiogrp {
+			fsl,pins = <
+				SC_P_USDHC1_CD_B_LSIO_GPIO4_IO22		0x06000021	/* MXM3 164 */
+			>;
+		};
+
+		pinctrl_usdhc2_gpio_sleep: usdhc1gpioslpgrp {
+			fsl,pins = <
+				SC_P_USDHC1_CD_B_LSIO_GPIO4_IO22		0x60		/* MXM3 164 */
+			>;
+		};
+
+		/* Apalis MMC1 */
+		pinctrl_usdhc2: usdhc2grp {
+			fsl,pins = <
+				SC_P_USDHC1_CLK_CONN_USDHC1_CLK			0x06000041	/* MXM3 154 */
+				SC_P_USDHC1_CMD_CONN_USDHC1_CMD			0x21		/* MXM3 150 */
+				SC_P_USDHC1_DATA0_CONN_USDHC1_DATA0		0x21		/* MXM3 160 */
+				SC_P_USDHC1_DATA1_CONN_USDHC1_DATA1		0x21		/* MXM3 162 */
+				SC_P_USDHC1_DATA2_CONN_USDHC1_DATA2		0x21		/* MXM3 144 */
+				SC_P_USDHC1_DATA3_CONN_USDHC1_DATA3		0x21		/* MXM3 146 */
+				SC_P_USDHC1_VSELECT_CONN_USDHC1_VSELECT		0x21
+			>;
+		};
+
+		pinctrl_usdhc2_100mhz: usdhc2grp100mhz {
+			fsl,pins = <
+				SC_P_USDHC1_CLK_CONN_USDHC1_CLK			0x06000041	/* MXM3 154 */
+				SC_P_USDHC1_CMD_CONN_USDHC1_CMD			0x21		/* MXM3 150 */
+				SC_P_USDHC1_DATA0_CONN_USDHC1_DATA0		0x21		/* MXM3 160 */
+				SC_P_USDHC1_DATA1_CONN_USDHC1_DATA1		0x21		/* MXM3 162 */
+				SC_P_USDHC1_DATA2_CONN_USDHC1_DATA2		0x21		/* MXM3 144 */
+				SC_P_USDHC1_DATA3_CONN_USDHC1_DATA3		0x21		/* MXM3 146 */
+				SC_P_USDHC1_VSELECT_CONN_USDHC1_VSELECT		0x21
+			>;
+		};
+
+		pinctrl_usdhc2_200mhz: usdhc2grp200mhz {
+			fsl,pins = <
+				SC_P_USDHC1_CLK_CONN_USDHC1_CLK			0x06000041	/* MXM3 154 */
+				SC_P_USDHC1_CMD_CONN_USDHC1_CMD			0x21		/* MXM3 150 */
+				SC_P_USDHC1_DATA0_CONN_USDHC1_DATA0		0x21		/* MXM3 160 */
+				SC_P_USDHC1_DATA1_CONN_USDHC1_DATA1		0x21		/* MXM3 162 */
+				SC_P_USDHC1_DATA2_CONN_USDHC1_DATA2		0x21		/* MXM3 144 */
+				SC_P_USDHC1_DATA3_CONN_USDHC1_DATA3		0x21		/* MXM3 146 */
+				SC_P_USDHC1_VSELECT_CONN_USDHC1_VSELECT		0x21
+			>;
+		};
+
+		pinctrl_usdhc2_sleep: usdhc2slpgrp {
+			fsl,pins = <
+				SC_P_USDHC1_CLK_LSIO_GPIO4_IO23			0x60		/* MXM3 154 */
+				SC_P_USDHC1_CMD_LSIO_GPIO4_IO24			0x60		/* MXM3 150 */
+				SC_P_USDHC1_DATA0_LSIO_GPIO4_IO25		0x60		/* MXM3 160 */
+				SC_P_USDHC1_DATA1_LSIO_GPIO4_IO26		0x60		/* MXM3 162 */
+				SC_P_USDHC1_DATA2_LSIO_GPIO4_IO27		0x60		/* MXM3 144 */
+				SC_P_USDHC1_DATA3_LSIO_GPIO4_IO28		0x60		/* MXM3 146 */
+				SC_P_USDHC1_VSELECT_CONN_USDHC1_VSELECT		0x21
+			>;
+		};
+
+		/* Apalis Parallel Camera */
+		pinctrl_parallel_csi: parallelcsigrp {
+			fsl,pins = <
+				SC_P_CSI_D00_CI_PI_D02				0xC0000041	/* MXM3 187 */
+				SC_P_CSI_D01_CI_PI_D03				0xC0000041	/* MXM3 185 */
+				SC_P_CSI_D02_CI_PI_D04				0xC0000041	/* MXM3 183 */
+				SC_P_CSI_D03_CI_PI_D05				0xC0000041	/* MXM3 181 */
+				SC_P_CSI_D04_CI_PI_D06				0xC0000041	/* MXM3 179 */
+				SC_P_CSI_D05_CI_PI_D07				0xC0000041	/* MXM3 177 */
+				SC_P_CSI_D06_CI_PI_D08				0xC0000041	/* MXM3 175 */
+				SC_P_CSI_D07_CI_PI_D09				0xC0000041	/* MXM3 173 */
+				SC_P_CSI_MCLK_CI_PI_MCLK			0xC0000041	/* MXM3 193 */
+				SC_P_CSI_PCLK_CI_PI_PCLK			0xC0000041	/* MXM3 191 */
+				SC_P_CSI_HSYNC_CI_PI_HSYNC			0xC0000041	/* MXM3 197 */
+				SC_P_CSI_VSYNC_CI_PI_VSYNC			0xC0000041	/* MXM3 195 */
+			>;
+		};
+
+		/* Apalis Parallel RGB LCD Interface */
+		pinctrl_hog0: hog0grp {
+			fsl,pins = <
+				SC_P_COMP_CTL_GPIO_1V8_3V3_GPIORHB_PAD		0x000514a0 /* Use pads in 3.3V mode */
+			>;
+		};
+
+		pinctrl_lcdif: lcdif-pins {
+			fsl,pins = <
+				SC_P_MCLK_OUT0_ADMA_LCDIF_CLK			0x60		/* MXM3 243 */
+				SC_P_MCLK_IN0_ADMA_LCDIF_VSYNC			0x60		/* MXM3 245 */
+				SC_P_SPI3_CS0_ADMA_LCDIF_HSYNC			0x60		/* MXM3 247 */
+				SC_P_MCLK_IN1_ADMA_LCDIF_EN			0x60		/* MXM3 249 */
+				SC_P_SPDIF0_EXT_CLK_ADMA_LCDIF_D12		0x60		/* MXM3 255 */
+				SC_P_SPI3_SCK_ADMA_LCDIF_D13			0x60		/* MXM3 257 */
+				SC_P_SPI3_SDO_ADMA_LCDIF_D14			0x60		/* MXM3 259 */
+				SC_P_SPI3_SDI_ADMA_LCDIF_D15			0x60		/* MXM3 261 */
+				SC_P_SPI3_CS1_ADMA_LCDIF_D16			0x60		/* MXM3 263 */
+				SC_P_UART1_CTS_B_ADMA_LCDIF_D17			0x60		/* MXM3 265 */
+				SC_P_ESAI0_TX2_RX3_ADMA_LCDIF_D06		0x60		/* MXM3 273 */
+				SC_P_ESAI0_TX3_RX2_ADMA_LCDIF_D07		0x60		/* MXM3 275 */
+				SC_P_ESAI0_TX4_RX1_ADMA_LCDIF_D08		0x60		/* MXM3 277 */
+				SC_P_ESAI0_TX5_RX0_ADMA_LCDIF_D09		0x60		/* MXM3 279 */
+				SC_P_SPDIF0_RX_ADMA_LCDIF_D10			0x60		/* MXM3 281 */
+				SC_P_SPDIF0_TX_ADMA_LCDIF_D11			0x60		/* MXM3 283 */
+				SC_P_ESAI0_FSR_ADMA_LCDIF_D00			0x60		/* MXM3 291 */
+				SC_P_ESAI0_FST_ADMA_LCDIF_D01			0x60		/* MXM3 293 */
+				SC_P_ESAI0_SCKR_ADMA_LCDIF_D02			0x60		/* MXM3 295 */
+				SC_P_ESAI0_SCKT_ADMA_LCDIF_D03			0x60		/* MXM3 297 */
+				SC_P_ESAI0_TX0_ADMA_LCDIF_D04			0x60		/* MXM3 299 */
+				SC_P_ESAI0_TX1_ADMA_LCDIF_D05			0x60		/* MXM3 301 */
+			>;
+		};
+
+		/* Apalis PWM1 */
+		pinctrl_pwm2: pwm2grp {
+			fsl,pins = <
+				SC_P_UART1_RTS_B_LSIO_PWM2_OUT			0x60		/* MXM3 2 */
+			>;
+		};
+
+		/* Apalis PWM2 */
+		pinctrl_pwm_mipi_lvds0: pwmmipilvds0grp {
+			fsl,pins = <
+				SC_P_MIPI_DSI0_GPIO0_00_MIPI_DSI0_PWM0_OUT	0x60		/* MXM3 4 */
+			>;
+		};
+
+		/* Apalis PWM_ */
+		pinctrl_pwm_gpios: gpiospwmgrp {
+			fsl,pins = <
+				SC_P_MIPI_DSI0_GPIO0_01_LSIO_GPIO1_IO28		0x21		/* MXM3 6 */
+				SC_P_MIPI_DSI1_GPIO0_01_LSIO_GPIO2_IO00		0x21		/* MXM3 8 */
+			>;
+		};
+
+		/* Apalis SATA1_ACT# */
+		pinctrl_sata1_act: sata1actgrp {
+			fsl,pins = <
+				SC_P_MIPI_DSI0_I2C0_SCL_LSIO_GPIO1_IO25		0x21		/* MXM3 35 */
+			>;
+		};
+
+		/* Apalis SPI1 */
+		pinctrl_lpspi0: lpspi0grp {
+			fsl,pins = <
+				SC_P_SPI0_CS0_LSIO_GPIO1_IO08			0x06000040	/* MXM3 227 */
+				SC_P_SPI0_SDI_ADMA_SPI0_SDI			0x06000040	/* MXM3 223 */
+				SC_P_SPI0_SDO_ADMA_SPI0_SDO			0x06000040	/* MXM3 225 */
+				SC_P_SPI0_SCK_ADMA_SPI0_SCK			0x06000040	/* MXM3 221 */
+			>;
+		};
+
+		/* Apalis SPI2 */
+		pinctrl_lpspi2: lpspi2grp {
+			fsl,pins = <
+				SC_P_SPI2_CS0_LSIO_GPIO1_IO00			0x21		/* MXM3 233 */
+				SC_P_SPI2_SDI_ADMA_SPI2_SDI			0x06000040	/* MXM3 229 */
+				SC_P_SPI2_SDO_ADMA_SPI2_SDO			0x06000040	/* MXM3 231 */
+				SC_P_SPI2_SCK_ADMA_SPI2_SCK			0x06000040	/* MXM3 235 */
+			>;
+		};
+
+		/* Apalis UART1 */
+		pinctrl_lpuart1: lpuart1grp {
+			fsl,pins = <
+				SC_P_UART1_RX_ADMA_UART1_RX			0x06000020	/* MXM3 118 */
+				SC_P_UART1_TX_ADMA_UART1_TX			0x06000020	/* MXM3 112 */
+			>;
+		};
+
+		/* Apalis UART1_ */
+		pinctrl_qspi0a_gpios: qspi0agpiosgrp {
+			fsl,pins = <
+				SC_P_QSPI0A_DATA2_LSIO_GPIO3_IO11		0x21		/* MXM3 114 */
+				SC_P_QSPI0A_DATA3_LSIO_GPIO3_IO12		0x21		/* MXM3 116 */
+			>;
+		};
+
+		/* Apalis UART2 */
+		pinctrl_lpuart0: lpuart0grp {
+			fsl,pins = <
+				SC_P_UART0_TX_ADMA_UART0_TX			0x06000020	/* MXM3 126 */
+				SC_P_UART0_RX_ADMA_UART0_RX			0x06000020	/* MXM3 132 */
+				SC_P_FLEXCAN0_RX_ADMA_UART0_RTS_B		0x06000020	/* MXM3 128 */
+				SC_P_FLEXCAN0_TX_ADMA_UART0_CTS_B		0x06000020	/* MXM3 130 */
+			>;
+		};
+
+		/* Apalis UART3 */
+		pinctrl_lpuart2: lpuart2grp {
+			fsl,pins = <
+				SC_P_UART2_TX_ADMA_UART2_TX			0x06000020	/* MXM3 134 */
+				SC_P_UART2_RX_ADMA_UART2_RX			0x06000020	/* MXM3 136 */
+			>;
+		};
+
+		/* Apalis UART4 */
+		pinctrl_lpuart3: lpuart3grp {
+			fsl,pins = <
+				SC_P_SCU_GPIO0_01_ADMA_UART3_TX			0x06000020	/* MXM3 138 */
+				SC_P_SCU_GPIO0_00_ADMA_UART3_RX			0x06000020	/* MXM3 140 */
+			>;
+		};
+
+		/* Apalis USBH_EN */
+		pinctrl_usbh_en: usbhen {
+			fsl,pins = <
+				SC_P_USB_SS3_TC1_LSIO_GPIO4_IO04		0x21		/* MXM3 84 */
+			>;
+		};
+
+		/* Apalis USBH_OC# */
+		pinctrl_gpio_usbh_oc_n: gpiousbhocn {
+			fsl,pins = <
+				SC_P_QSPI0A_DATA0_LSIO_GPIO3_IO09		0x04000020	/* MXM3 96 */
+			>;
+		};
+
+		/* Apalis USBO1_EN */
+		pinctrl_usbo1_en: usbo1en {
+			fsl,pins = <
+				/* Apalis USBO1_EN */
+				SC_P_QSPI0A_SCLK_LSIO_GPIO3_IO16		0x21		/* MXM3 274 */
+			>;
+		};
+
+		/* Apalis USBO1 */
+		pinctrl_usbo1oc: usbo1oc {
+			fsl,pins = <
+				/* Apalis USBO1_OC# */
+				SC_P_USB_SS3_TC2_LSIO_GPIO4_IO05		0x04000020	/* MXM3 262 */
+			>;
+		};
+
+		/* Apalis WAKE1_MICO */
+		pinctrl_gpio_keys: gpio-keys {
+			fsl,pins = <
+				SC_P_MIPI_DSI0_I2C0_SDA_MIPI_DSI1_GPIO0_IO03	0x06700021	/* MXM3 37 */
+			>;
+		};
+
+		/* On-module Gigabit Ethernet PHY Micrel KSZ9031 */
+		pinctrl_fec1: fec1grp {
+			fsl,pins = <
+				SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB0_PAD	0x14a0 /* Use pads in 3.3V mode */
+				SC_P_COMP_CTL_GPIO_1V8_3V3_ENET_ENETB1_PAD	0x14a0 /* Use pads in 3.3V mode */
+				SC_P_ENET0_MDC_CONN_ENET0_MDC			0x06000020
+				SC_P_ENET0_MDIO_CONN_ENET0_MDIO			0x06000020
+				SC_P_ENET0_RGMII_TX_CTL_CONN_ENET0_RGMII_TX_CTL	0x61
+				SC_P_ENET0_RGMII_TXC_CONN_ENET0_RGMII_TXC	0x61
+				SC_P_ENET0_RGMII_TXD0_CONN_ENET0_RGMII_TXD0	0x61
+				SC_P_ENET0_RGMII_TXD1_CONN_ENET0_RGMII_TXD1	0x61
+				SC_P_ENET0_RGMII_TXD2_CONN_ENET0_RGMII_TXD2	0x61
+				SC_P_ENET0_RGMII_TXD3_CONN_ENET0_RGMII_TXD3	0x61
+				SC_P_ENET0_RGMII_RXC_CONN_ENET0_RGMII_RXC	0x61
+				SC_P_ENET0_RGMII_RX_CTL_CONN_ENET0_RGMII_RX_CTL	0x61
+				SC_P_ENET0_RGMII_RXD0_CONN_ENET0_RGMII_RXD0	0x61
+				SC_P_ENET0_RGMII_RXD1_CONN_ENET0_RGMII_RXD1	0x61
+				SC_P_ENET0_RGMII_RXD2_CONN_ENET0_RGMII_RXD2	0x61
+				SC_P_ENET0_RGMII_RXD3_CONN_ENET0_RGMII_RXD3	0x61
+				/* On-module ETH_RESET# */
+				SC_P_MIPI_CSI0_MCLK_OUT_LSIO_GPIO3_IO04		0x21
+				/* On-module ETH_INT# */
+				SC_P_ADC_IN2_LSIO_GPIO1_IO12			0x21
+			>;
+		};
+
+		/* On-module GPIO expanders */
+		pinctrl_i2c_exp1_int: i2cexp1int {
+			fsl,pins = <
+				SC_P_PCIE_CTRL0_WAKE_B_LSIO_GPIO4_IO02		0x21
+			>;
+		};
+
+		pinctrl_i2c_exp2_int: i2cexp2int {
+			fsl,pins = <
+				SC_P_PCIE_CTRL0_PERST_B_LSIO_GPIO4_IO00		0x21
+			>;
+		};
+
+		/* On-module eMMC */
+		pinctrl_usdhc1: usdhc1grp {
+			fsl,pins = <
+				SC_P_EMMC0_CLK_CONN_EMMC0_CLK			0x06000041
+				SC_P_EMMC0_CMD_CONN_EMMC0_CMD			0x21
+				SC_P_EMMC0_DATA0_CONN_EMMC0_DATA0		0x21
+				SC_P_EMMC0_DATA1_CONN_EMMC0_DATA1		0x21
+				SC_P_EMMC0_DATA2_CONN_EMMC0_DATA2		0x21
+				SC_P_EMMC0_DATA3_CONN_EMMC0_DATA3		0x21
+				SC_P_EMMC0_DATA4_CONN_EMMC0_DATA4		0x21
+				SC_P_EMMC0_DATA5_CONN_EMMC0_DATA5		0x21
+				SC_P_EMMC0_DATA6_CONN_EMMC0_DATA6		0x21
+				SC_P_EMMC0_DATA7_CONN_EMMC0_DATA7		0x21
+				SC_P_EMMC0_STROBE_CONN_EMMC0_STROBE		0x41
+				SC_P_EMMC0_RESET_B_CONN_EMMC0_RESET_B		0x21
+			>;
+		};
+
+		pinctrl_usdhc1_100mhz: usdhc1grp100mhz {
+			fsl,pins = <
+				SC_P_EMMC0_CLK_CONN_EMMC0_CLK			0x06000041
+				SC_P_EMMC0_CMD_CONN_EMMC0_CMD			0x21
+				SC_P_EMMC0_DATA0_CONN_EMMC0_DATA0		0x21
+				SC_P_EMMC0_DATA1_CONN_EMMC0_DATA1		0x21
+				SC_P_EMMC0_DATA2_CONN_EMMC0_DATA2		0x21
+				SC_P_EMMC0_DATA3_CONN_EMMC0_DATA3		0x21
+				SC_P_EMMC0_DATA4_CONN_EMMC0_DATA4		0x21
+				SC_P_EMMC0_DATA5_CONN_EMMC0_DATA5		0x21
+				SC_P_EMMC0_DATA6_CONN_EMMC0_DATA6		0x21
+				SC_P_EMMC0_DATA7_CONN_EMMC0_DATA7		0x21
+				SC_P_EMMC0_STROBE_CONN_EMMC0_STROBE		0x41
+				SC_P_EMMC0_RESET_B_CONN_EMMC0_RESET_B		0x21
+			>;
+		};
+
+		pinctrl_usdhc1_200mhz: usdhc1grp200mhz {
+			fsl,pins = <
+				SC_P_EMMC0_CLK_CONN_EMMC0_CLK			0x06000041
+				SC_P_EMMC0_CMD_CONN_EMMC0_CMD			0x21
+				SC_P_EMMC0_DATA0_CONN_EMMC0_DATA0		0x21
+				SC_P_EMMC0_DATA1_CONN_EMMC0_DATA1		0x21
+				SC_P_EMMC0_DATA2_CONN_EMMC0_DATA2		0x21
+				SC_P_EMMC0_DATA3_CONN_EMMC0_DATA3		0x21
+				SC_P_EMMC0_DATA4_CONN_EMMC0_DATA4		0x21
+				SC_P_EMMC0_DATA5_CONN_EMMC0_DATA5		0x21
+				SC_P_EMMC0_DATA6_CONN_EMMC0_DATA6		0x21
+				SC_P_EMMC0_DATA7_CONN_EMMC0_DATA7		0x21
+				SC_P_EMMC0_STROBE_CONN_EMMC0_STROBE		0x41
+				SC_P_EMMC0_RESET_B_CONN_EMMC0_RESET_B		0x21
+			>;
+		};
+
+		/* On-module I2C */
+		pinctrl_lpi2c0: i2c0csi0grp {
+			fsl,pins = <
+				SC_P_MIPI_CSI0_GPIO0_00_ADMA_I2C0_SCL 		0xc6000020	/* MXM3 140 */
+				SC_P_MIPI_CSI0_GPIO0_01_ADMA_I2C0_SDA 		0xc6000020	/* MXM3 142 */
+			>;
+		};
+
+		/* On-module I2S SGTL5000 for Apalis Analogue Audio */
+		pinctrl_sai1: sai1grp {
+			fsl,pins = <
+				SC_P_SAI1_RXD_ADMA_SAI1_RXD			0x06000040
+				SC_P_SPI0_CS1_ADMA_SAI1_TXD			0x06000040
+				SC_P_SAI1_RXC_ADMA_SAI1_TXC			0x06000040
+				SC_P_SAI1_RXFS_ADMA_SAI1_TXFS			0x06000040
+			>;
+		};
+
+		/* On-module I2S SGTL5000 SYS_MCLK */
+		pinctrl_sgtl5000: sgtl5000grp {
+			fsl,pins = <
+				SC_P_ADC_IN3_ADMA_ACM_MCLK_OUT0			0x21
+			>;
+		};
+
+		/* On-module RESET_MOCI#_DRV */
+		pinctrl_reset_moci: gpioresetmocigrp {
+			fsl,pins = <
+				SC_P_PCIE_CTRL0_CLKREQ_B_LSIO_GPIO4_IO01	0x21
+			>;
+		};
+
+		/* On-module touch pen-down interrupt */
+		pinctrl_ad7879_int: ad7879-int {
+			fsl,pins = <
+				SC_P_MIPI_CSI0_I2C0_SCL_LSIO_GPIO3_IO05		0x21
+			>;
+		};
+	};
+};
+
+&ldb1 {
+	lvds-channel@0 {
+		status = "okay";
+
+		port@1 {
+			reg = <1>;
+
+			lvds1_out: endpoint {
+				remote-endpoint = <&lcd_panel2_in>;
+			};
+		};
+	};
+};
+
+/* Apalis SPI1 */
+&lpspi0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	fsl,spi-num-chipselects = <1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpspi0>;
+	cs-gpios = <&gpio1 8 GPIO_ACTIVE_LOW>;
+/* Todo: measure with oscilloscope if cs-gpios or hardware gpio is better */
+};
+
+/* Apalis SPI2 */
+&lpspi2 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	fsl,spi-num-chipselects = <1>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpspi2>;
+	cs-gpios = <&gpio1 0 GPIO_ACTIVE_LOW>;
+/* Todo: measure with oscilloscope if cs-gpios or hardware gpio is better */
+};
+
+/* Apalis UART1 */
+&lpuart1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart1>;
+};
+
+/* Apalis UART2 */
+&lpuart0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart0>;
+};
+
+/* Apalis UART3 */
+&lpuart2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart2>;
+};
+
+/* Apalis UART4 */
+&lpuart3 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_lpuart3>;
+};
+
+&mipi_csi_0 {
+	#address-cells = <1>;
+	#size-cells = <0>;
+	/delete-property/virtual-channel;
+};
+
+&mipi_dsi1 {
+	pwr-delay = <10>;
+};
+
+&mipi_dsi2 {
+	pwr-delay = <10>;
+};
+
+&mipi_dsi_bridge2 {
+	port@1 {
+		mipi_dsi_bridge2_out: endpoint {
+			remote-endpoint = <&lt8912_1_in>;
+		};
+	};
+};
+
+/* Apalis PCIE1 */
+#if 0 /* Todo */
+&pcieb {
+	ext_osc = <0>;
+	hard-wired = <0>;
+	status = "okay";
+};
+#endif
+
+/* Apalis BKL1_PWM */
+&pwm_mipi_lvds1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm_mipi_lvds1>;
+	#pwm-cells = <3>;
+};
+
+/* Apalis PWM1 */
+&pwm2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm2>;
+	#pwm-cells = <3>;
+};
+
+/* Apalis PWM2 */
+&pwm_mipi_lvds0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_pwm_mipi_lvds0>;
+	#pwm-cells = <3>;
+};
+
+&rpmsg{
+	/*
+	 * 64K for one rpmsg instance:
+	 */
+	vdev-nums = <2>;
+	reg = <0x0 0x90000000 0x0 0x20000>;
+	status = "okay";
+};
+
+/* On-module I2S */
+&sai1 {
+	#sound-dai-cells = <0>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&pinctrl_sai1>;
+	status = "okay";
+};
+
+&tsens {
+	tsens-num = <3>;
+};
+
+&thermal_zones {
+	pmic-thermal0 {
+		polling-delay-passive = <250>;
+		polling-delay = <2000>;
+		thermal-sensors = <&tsens 2>;
+
+		trips {
+			pmic_alert0: trip0 {
+				temperature = <80000>;
+				hysteresis = <2000>;
+				type = "passive";
+			};
+
+			pmic_crit0: trip1 {
+				temperature = <125000>;
+				hysteresis = <2000>;
+				type = "critical";
+			};
+		};
+
+		cooling-maps {
+			map0 {
+				trip = <&pmic_alert0>;
+				cooling-device =
+				<&A35_0 THERMAL_NO_LIMIT THERMAL_NO_LIMIT>;
+			};
+		};
+	};
+};
+
+/* On-module eMMC */
+&usdhc1 {
+	bus-width = <8>;
+	non-removable;
+	pinctrl-names = "default", "state_100mhz", "state_200mhz";
+	pinctrl-0 = <&pinctrl_usdhc1>;
+	pinctrl-1 = <&pinctrl_usdhc1_100mhz>;
+	pinctrl-2 = <&pinctrl_usdhc1_200mhz>;
+	status = "okay";
+};
+
+/* Apalis MMC1 */
+&usdhc2 {
+	bus-width = <4>;
+	cd-gpios = <&gpio4 22 GPIO_ACTIVE_LOW>;
+	/*
+	 * The PMIC on V1.0A HW generates 1.6V instead of 1.8V which creates
+	 * issues with certain SD cards, disable 1.8V signaling for now.
+	 */
+	no-1-8-v;
+	pinctrl-names = "default", "state_100mhz", "state_200mhz", "sleep";
+	pinctrl-0 = <&pinctrl_usdhc2>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-1 = <&pinctrl_usdhc2_100mhz>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-2 = <&pinctrl_usdhc2_200mhz>, <&pinctrl_usdhc2_gpio>;
+	pinctrl-3 = <&pinctrl_usdhc2_sleep>, <&pinctrl_usdhc2_gpio_sleep>;
+	vmmc-supply = <&reg_module_3v3>;
+};
+
+&vpu_decoder {
+	core_type = <1>;
+};
+
+&vpu_encoder {
+	core_type = <1>;
+};

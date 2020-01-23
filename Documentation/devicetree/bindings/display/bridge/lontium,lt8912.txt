@@ -1,0 +1,62 @@
+Lontium LT8912 MIPI-DSI to LVDS and HDMI/MHL bridge bindings
+
+Required properties and nodes:
+ - compatible: "lontium,lt8912"
+ - hpd-gpios: a GPIO spec for the  hot-plug detect pin
+ - port: node referencing the MIPI-DSI source
+ - reg: i2c address of the bridge
+ - i2c-bus: phandle of an I2C controller used for register access
+ One of:
+ - ddc-i2c-bus: reference to a DDC-I2C bus for EDID retrival
+ - display-timings: hardcoded display timings if ddc-i2c-bus does not exist.
+		    Refer to binding doc display-timing.txt for details
+
+Optional properties:
+ - reset-gpios: a GPIO spec for the reset pin
+
+Examples:
+&i2c1 {
+	lt8912@48 {
+		compatible = "lontium,lt8912";
+		ddc-i2c-bus = <&i2c0>;
+		hpd-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>;
+		reg = <0x48>;
+
+		port {
+			lt8912_1_in: endpoint {
+				remote-endpoint = <&mipi_dsi_bridge1_out>;
+			};
+		};
+
+&i2c2 {
+	lt8912@48 {
+		compatible = "lontium,lt8912";
+		hpd-gpios = <&gpio1 31 GPIO_ACTIVE_HIGH>;
+		reg = <0x48>;
+
+		port {
+			lt8912_1_in: endpoint {
+				remote-endpoint = <&mipi_dsi_bridge1_out>;
+			};
+		};
+
+		display-timings {
+			native-mode = <&timing0>;
+			timing0: timing0 {
+				clock-frequency = <74250000>;
+				hactive = <1280>;
+				vactive = <720>;
+				hfront-porch = <110>;
+				hsync-len = <40>;
+				hback-porch = <220>;
+				vfront-porch = <5>;
+				vsync-len = <5>;
+				vback-porch = <20>;
+				hsync-active = <0>;
+				vsync-active = <0>;
+				de-active = <0>;
+				pixelclk-active = <0>;
+			};
+		};
+	};
+};

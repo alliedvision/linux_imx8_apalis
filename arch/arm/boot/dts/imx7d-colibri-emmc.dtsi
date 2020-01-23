@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: (GPL-2.0 OR MIT)
+/*
+ * Copyright 2017 Toradex AG
+ */
+
+#include "imx7d.dtsi"
+#include "imx7-colibri.dtsi"
+
+/ {
+	aliases {
+		/* the following, together with kernel patches, forces a fixed assignment
+		   between device id and usdhc controller */
+		/* i.e. the eMMC on usdhc3 will be /dev/mmcblk0 */
+		mmc0 = &usdhc3; /* eMMC */
+		mmc1 = &usdhc1; /* MMC 4bit slot */
+	};
+
+	memory {
+		device_type = "memory";
+		reg = <0x80000000 0x40000000>;
+	};
+};
+
+&usbotg2 {
+	dr_mode = "host";
+};
+
+&usdhc3 {
+	status = "okay";
+};
