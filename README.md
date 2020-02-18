@@ -23,6 +23,8 @@ SOFTWARE.
 # Allied Vision MIPI CSI-2 driver for Toradex Apalis iMX8
 
 Driver for Allied Vision Alvium cameras with MIPI CSI-2 interface.   
+![Alvium camera](https://cdn.alliedvision.com/fileadmin/content/images/cameras/Alvium/various/alvium-cameras-models.png)
+
 Supported board: Toradex Apalis iMX8   
 Supported OS: Embedded Linux, see https://www.toradex.com/operating-systems/embedded-linux
 
