@@ -73,3 +73,7 @@ To install the new kernel and driver on Toradex Apalis iMX8:
 1. On Toradex Apalis iMX8, replace the kernel image and device tree blob on the boot partition.   
 2. Copy the lib folder to the target's rootfs.
 3. Reboot the board.
+
+ ## Additional information
+ :open_book:
+ https://github.com/alliedvision/documentation/blob/master/Toradex_Apalis.md
