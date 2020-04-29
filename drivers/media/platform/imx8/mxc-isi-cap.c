@@ -34,16 +34,14 @@
 #include "mxc-isi-hw.h"
 #include "mxc-media-dev.h"
 
+enum flush_state {
+	FLUSH_NOT_INITIATED = 0,
+	FLUSH_IN_PROGRESS,
+	FLUSH_DONE,
+};
+
 struct mxc_isi_fmt mxc_isi_out_formats[] = {
 	{
-		.name		= "RAW8",
-		.fourcc		= V4L2_PIX_FMT_GREY,
-		.depth		= { 8 },
-		.color		= MXC_ISI_OUT_FMT_RAW8,
-		.memplanes	= 1,
-		.colplanes	= 1,
-		.mbus_code	= MEDIA_BUS_FMT_Y8_1X8,
-	}, {
 		.name		= "SBGGR8",
 		.fourcc		= V4L2_PIX_FMT_SBGGR8,
 		.depth		= { 8 },
@@ -139,12 +137,28 @@ struct mxc_isi_fmt mxc_isi_out_formats[] = {
 		.memplanes	= 3,
 		.colplanes	= 3,
 		.mbus_code	= MEDIA_BUS_FMT_YUV8_1X24,
-	}
+	}, {
+		.name		= "MONO8", /* Mono8 workaround */
+		.fourcc		= V4L2_PIX_FMT_GREY,
+		.depth		= { 8, 8 },
+		.color		= MXC_ISI_OUT_FMT_YUV422_2P8P,
+		.memplanes	= 2,
+		.colplanes	= 2,
+		.mbus_code	= MEDIA_BUS_FMT_VYUY8_2X8,
+ 	}
 };
 
 struct mxc_isi_fmt *mxc_isi_get_format(unsigned int index)
 {
 	return &mxc_isi_out_formats[index];
+}
+
+static void update_flush_state(struct mxc_isi_dev *mxc_isi,
+	enum flush_state new_state)
+{
+	struct video_device *vdev = &mxc_isi->isi_cap.vdev;
+
+	sprintf(&vdev->flush, "%d", new_state);
 }
 
 /**
@@ -285,6 +299,7 @@ void mxc_isi_cap_frame_write_done(struct mxc_isi_dev *mxc_isi)
 		list_del_init(&buf->list);
 		buf->v4l2_buf.vb2_buf.timestamp = ktime_get_ns();
 		vb2_buffer_done(&buf->v4l2_buf.vb2_buf, VB2_BUF_STATE_DONE);
+		mxc_isi->isi_cap.frame_done_count++;
 	}
 
 	mxc_isi->isi_cap.frame_count++;
@@ -388,6 +403,9 @@ static void cap_vb2_buffer_queue(struct vb2_buffer *vb2)
 			= container_of(v4l2_buf, struct mxc_isi_buffer, v4l2_buf);
 	struct mxc_isi_dev *mxc_isi = vb2_get_drv_priv(vb2->vb2_queue);
 	unsigned long flags;
+
+	/* Reset flush state, because new buffers are enqueued */
+	update_flush_state(mxc_isi, FLUSH_NOT_INITIATED);
 
 	spin_lock_irqsave(&mxc_isi->slock, flags);
 
@@ -601,6 +619,8 @@ int mxc_isi_ctrls_create(struct mxc_isi_dev *mxc_isi)
 
 	v4l2_ctrl_handler_init(handler, 4);
 
+/* disable isi controls */
+/*
 	ctrls->hflip = v4l2_ctrl_new_std(handler, &mxc_isi_ctrl_ops,
 					V4L2_CID_HFLIP, 0, 1, 1, 0);
 	ctrls->vflip = v4l2_ctrl_new_std(handler, &mxc_isi_ctrl_ops,
@@ -608,7 +628,7 @@ int mxc_isi_ctrls_create(struct mxc_isi_dev *mxc_isi)
 
 	ctrls->alpha = v4l2_ctrl_new_std(handler, &mxc_isi_ctrl_ops,
 					V4L2_CID_ALPHA_COMPONENT, 0, 0xff, 1, 0);
-
+*/
 	if (!handler->error)
 		ctrls->ready = true;
 
@@ -681,6 +701,7 @@ static int mxc_isi_capture_open(struct file *file)
 	source_pad = mxc_isi_get_remote_source_pad(mxc_isi);
 	if (source_pad == NULL) {
 		v4l2_err(mxc_isi->v4l2_dev, "%s, No remote pad found!\n", __func__);
+		ret = -EINVAL;
 		goto fail;
 	}
 
@@ -688,6 +709,7 @@ static int mxc_isi_capture_open(struct file *file)
 	sd = media_entity_to_v4l2_subdev(source_pad->entity);
 	if (sd == NULL) {
 		v4l2_err(mxc_isi->v4l2_dev, "%s, No remote subdev found!\n", __func__);
+		ret = -EINVAL;
 		goto fail;
 	}
 
@@ -721,10 +743,13 @@ static int mxc_isi_capture_open(struct file *file)
 	dst_f->height = sd_fmt.format.height;
 	set_frame_bounds(dst_f, sd_fmt.format.width, sd_fmt.format.height);
 
-	/* Check if we support current format from the subdev and then set the format */
-	for (i = 0; i < ARRAY_SIZE(mxc_isi_out_formats); ++i) {
-		if (mxc_isi_out_formats[i].mbus_code == sd_fmt.format.code) {
-			dst_f->fmt = &mxc_isi_out_formats[i];
+	if(!dst_f->fmt)
+	{
+		/* Check if we support current format from the subdev and then set the format */
+		for (i = 0; i < ARRAY_SIZE(mxc_isi_out_formats); ++i) {
+			if (mxc_isi_out_formats[i].mbus_code == sd_fmt.format.code) {
+				dst_f->fmt = &mxc_isi_out_formats[i];
+			}
 		}
 	}
 
@@ -738,7 +763,7 @@ static int mxc_isi_capture_open(struct file *file)
 
 fail:
 	atomic_dec(&mxc_isi->open_count);
-	return -EINVAL;
+	return ret;
 }
 
 static int mxc_isi_capture_release(struct file *file)
@@ -922,13 +947,53 @@ static void mxc_isi_cap_try_to_set_default_formats(struct mxc_isi_dev *mxc_isi)
 	}
 }
 
+static void update_bytesperline_and_sizeimage(struct mxc_isi_frame *dst_f, struct v4l2_pix_format_mplane *pix)
+{
+	struct mxc_isi_fmt *fmt = dst_f->fmt;
+	int bpl, i;
+
+	for (i = 0; i < pix->num_planes; i++) {
+		bpl = pix->plane_fmt[i].bytesperline;
+
+		if ((bpl == 0) || (bpl / (fmt->depth[i] >> 3)) < pix->width)
+			pix->plane_fmt[i].bytesperline =
+						(pix->width * fmt->depth[i]) >> 3;
+
+		if (pix->plane_fmt[i].sizeimage == 0) {
+
+			if ((i == 1) && (pix->pixelformat == V4L2_PIX_FMT_NV12))
+				pix->plane_fmt[i].sizeimage =
+					(pix->width * (pix->height >> 1) * fmt->depth[i] >> 3);
+			else
+				pix->plane_fmt[i].sizeimage = (pix->width * pix->height *
+						fmt->depth[i] >> 3);
+		}
+	}
+
+	if (pix->num_planes > 1) {
+		for (i = 0; i < pix->num_planes; i++) {
+			dst_f->bytesperline[i] = pix->plane_fmt[i].bytesperline;
+			dst_f->sizeimage[i] = pix->plane_fmt[i].sizeimage;
+		}
+	} else {
+		dst_f->bytesperline[0] = dst_f->width * dst_f->fmt->depth[0] / 8;
+		dst_f->sizeimage[0] = dst_f->height * dst_f->bytesperline[0];
+	}
+
+	/* Mono8 workaround */
+ 	if(pix->pixelformat == V4L2_PIX_FMT_GREY)
+	{
+		pix->num_planes = 1;
+	}
+}
+
+
 static int mxc_isi_cap_g_fmt_mplane(struct file *file, void *fh,
 				 struct v4l2_format *f)
 {
 	struct mxc_isi_dev *mxc_isi = video_drvdata(file);
 	struct v4l2_pix_format_mplane *pix = &f->fmt.pix_mp;
 	struct mxc_isi_frame *dst_f;
-	int i;
 
 	dev_dbg(&mxc_isi->pdev->dev, "%s\n", __func__);
 
@@ -946,10 +1011,7 @@ static int mxc_isi_cap_g_fmt_mplane(struct file *file, void *fh,
 	pix->colorspace = V4L2_COLORSPACE_JPEG;
 	pix->num_planes = dst_f->fmt->memplanes;
 
-	for (i = 0; i < pix->num_planes; ++i) {
-		pix->plane_fmt[i].bytesperline = dst_f->bytesperline[i];
-		pix->plane_fmt[i].sizeimage = dst_f->sizeimage[i];
-	}
+	update_bytesperline_and_sizeimage(dst_f, pix);
 
 	return 0;
 }
@@ -1097,9 +1159,8 @@ static int mxc_isi_cap_s_fmt_mplane(struct file *file, void *priv,
 	struct mxc_isi_frame *dst_f = &mxc_isi->isi_cap.dst_f;
 	struct mxc_isi_fmt *fmt;
 	struct v4l2_subdev_format sd_fmt = {};
-	struct v4l2_subdev *sd;
+	struct v4l2_subdev *sd = mxc_isi_get_sensor_subdev(&mxc_isi->isi_cap.sd);
 	int ret;
-	int bpl;
 	int i;
 
 
@@ -1131,8 +1192,6 @@ static int mxc_isi_cap_s_fmt_mplane(struct file *file, void *priv,
 
 	/* update out put frame size and formate */
 	if (pix->height <= 0 || pix->width <= 0) {
-		/* Get remote source pad subdev */
-		sd = mxc_isi_get_sensor_subdev(&mxc_isi->isi_cap.sd);
 
 		if (sd == NULL)
 			return -EINVAL;
@@ -1146,39 +1205,21 @@ static int mxc_isi_cap_s_fmt_mplane(struct file *file, void *priv,
 		pix->height = sd_fmt.format.height;
 	}
 
+	sd_fmt.which = V4L2_SUBDEV_FORMAT_TRY;
+	sd_fmt.format.width = pix->width;
+	sd_fmt.format.height = pix->height;
+	ret = v4l2_subdev_call(sd, pad, set_fmt, NULL, &sd_fmt);
+	if (ret != 0) {
+		return ret;
+	}
+
 	dst_f->fmt = fmt;
 	dst_f->height = pix->height;
 	dst_f->width = pix->width;
 
 	pix->num_planes = fmt->memplanes;
 
-	for (i = 0; i < pix->num_planes; i++) {
-		bpl = pix->plane_fmt[i].bytesperline;
-
-		if ((bpl == 0) || (bpl / (fmt->depth[i] >> 3)) < pix->width)
-			pix->plane_fmt[i].bytesperline =
-						(pix->width * fmt->depth[i]) >> 3;
-
-		if (pix->plane_fmt[i].sizeimage == 0) {
-
-			if ((i == 1) && (pix->pixelformat == V4L2_PIX_FMT_NV12))
-				pix->plane_fmt[i].sizeimage =
-					(pix->width * (pix->height >> 1) * fmt->depth[i] >> 3);
-			else
-				pix->plane_fmt[i].sizeimage = (pix->width * pix->height *
-						fmt->depth[i] >> 3);
-		}
-	}
-
-	if (pix->num_planes > 1) {
-		for (i = 0; i < pix->num_planes; i++) {
-			dst_f->bytesperline[i] = pix->plane_fmt[i].bytesperline;
-			dst_f->sizeimage[i] = pix->plane_fmt[i].sizeimage;
-		}
-	} else {
-		dst_f->bytesperline[0] = dst_f->width * dst_f->fmt->depth[0] / 8;
-		dst_f->sizeimage[0] = dst_f->height * dst_f->bytesperline[0];
-	}
+	update_bytesperline_and_sizeimage(dst_f, pix);
 
 	memcpy(&mxc_isi->pix, pix, sizeof(*pix));
 
@@ -1554,14 +1595,295 @@ static int mxc_isi_cap_s_input(struct file *file, void *fh, unsigned int input)
 static long mxc_isi_cap_default_ioctl(struct file *file, void *fh, bool use_prio,
 			unsigned int cmd, void *arg)
 {
+	struct v4l2_fh *vfh = file->private_data;
+	struct video_device *vdev = vfh->vdev;
+
 	struct mxc_isi_dev *mxc_isi = video_drvdata(file);
+	struct mxc_isi_cap_dev *isi_cap = &mxc_isi->isi_cap;
+
 	struct v4l2_subdev *sd = mxc_isi_get_sensor_subdev(&mxc_isi->isi_cap.sd);
 
-    if (!v4l2_subdev_has_op(sd, core, ioctl)) {
-        return -ENOTTY;
+	struct vb2_queue *q = &isi_cap->vb2_q;
+
+	switch (cmd) {
+    case VIDIOC_MEM_ALLOC: {
+        struct v4l2_dma_mem *mem = arg;
+        int ret = 0;
+        int count = 1;
+        int plane_size[1] = { 0 };
+
+        ret = vb2_core_create_bufs(q, mem->memory, &count, 1, plane_size, true, mem->index);
+
+        if (ret < 0)
+            return ret;
+        return 0;
+
+        break;
+    }
+    case VIDIOC_MEM_FREE: {
+        struct v4l2_dma_mem *mem = arg;
+        int ret = 0;
+        ret = vb2_buffer_free(q, mem->index);
+        if (ret < 0)
+            return ret;
+        return 0;
+        break;
+    }
+	case VIDIOC_FLUSH_FRAMES: {
+		update_flush_state(mxc_isi, FLUSH_IN_PROGRESS);
+		vb2_core_queue_release(q);
+		update_flush_state(mxc_isi, FLUSH_DONE);
+		return 0;
+		break;
 	}
+	case VIDIOC_STREAMSTAT: {
+		struct v4l2_stats_t *stream_stats = arg;
+		stream_stats->FramesCount = isi_cap->frame_done_count;
+		stream_stats->FramesUnderrun = vdev->qbuf_count - vdev->dqbuf_count;
+		//TODO: complete stream statistics
+		return 0;
+		break;
+	}
+	case VIDIOC_RESET_STREAMSTAT: {
+		memset(&vdev->stream_stats, 0x00, sizeof(struct v4l2_stats_t));
+		vdev->qbuf_count = 0;
+		vdev->dqbuf_count = 0;
+		isi_cap->frame_done_count = 0;
+		//isi_cap->frame_interval = 0;
+		return 0;
+		break;
+	}
+    case VIDIOC_STREAMON_EX: {
+        struct v4l2_streamon_ex *streamon = arg;
+        int ret = 0;
+        int i = 0;
+        struct v4l2_pix_format fmt;
+        struct v4l2_subdev_format sd_fmt;
+
+        fmt.width = streamon->nIPU_X;
+        fmt.height = streamon->nIPU_Y;
+        fmt.sizeimage = streamon->nTotalDataSize;
+
+#if 0
+	v4l2_fill_mbus_format(&sd_fmt.format, &fmt, MEDIA_BUS_FMT_UYVY8_2X8);
+	v4l2_fill_mbus_format(&sd_fmt.format, &fmt, MEDIA_BUS_FMT_YUYV8_2X8);
+
+	v4l2_fill_mbus_format(&sd_fmt.format, &fmt, isi_cap->mbus_code); isi_frame -> isi_fmt -> mbus_code
+	    ret = v4l2_subdev_call(sd, pad, set_fmt, NULL, &sd_fmt);
+	pr_err(" -> STREAMON; ret: %d, %s, %d", ret, __func__, __LINE__);
+
+	ret = mx6s_vidioc_streamon(file, vfh, streamon->nBufferType);
+#endif
+	ret = mxc_isi_cap_streamon(file, vfh, streamon->nBufferType);
+	pr_err(" -> STREAMON; ret: %d, %s, %d", ret, __func__, __LINE__);
+	pr_err(" -> num_buffers: %d", q->num_buffers);
+
+#if 0
+	struct media_entity *entity = &vdev->entity;
+	struct v4l2_subdev *subdev;
+	subdev = media_entity_to_v4l2_subdev(entity);
+
+	pr_err(" -> %s, %d", __func__, __LINE__)
+	    pr_err(" -> num buffers: %d", q->num_buffers);
+
+	ret = mxc_isi_config_parm(mxc_isi);
+	if (ret < 0)
+	    return -EINVAL;
+	for (i = 0; i < q->num_buffers; i++) {
+	    ret = vb2_core_qbuf(q, i, NULL);
+	    if (ret) {
+		pr_err(" -> %s, %d", __func__, __LINE__);
+		return ret;
+	    }
+	}
+	ret = vb2_core_streamon(q, streamon->nBufferType);
+	pr_err(" -> %s, %d", __func__, __LINE__);
+	mxc_isi_channel_enable(mxc_isi);
+	mxc_isi_pipeline_enable(mxc_isi, 1);
+
+	mxc_isi->is_streaming = 1;
+#endif
+
+        return ret;
+        break;
+    }
+    case VIDIOC_STREAMOFF_EX: {
+        struct v4l2_streamoff_ex *streamoff = arg;
+        int ret = 0;
+
+		ret = mxc_isi_cap_streamoff(file, vfh, streamoff->nBufferType);
+
+		if (ret < 0)
+			return ret;
+
+        return 0;
+        break;
+    }
+
+    case VIDIOC_G_STATISTIC_CAPABILITIES: {
+        struct v4l2_statistics_capabilities *statistics_capabilities = arg;
+        statistics_capabilities->nStatisticsCapability = V4L2_STATISTICS_CAPABILITY_FrameCount |
+				//TODO: complete statistics capability
+				#if 0
+                V4L2_STATISTICS_CAPABILITY_FramesIncomplete |
+                V4L2_STATISTICS_CAPABILITY_PacketCRCError |
+                V4L2_STATISTICS_CAPABILITY_CurrentFrameInterval |
+                V4L2_STATISTICS_CAPABILITY_CurrentFrameInterval |
+				#endif
+                V4L2_STATISTICS_CAPABILITY_FramesUnderrun;
+        return 0;
+        break;
+    }
+
+    case VIDIOC_G_MIN_ANNOUNCED_FRAMES: {
+        struct v4l2_min_announced_frames *min_announced_frames = arg;
+        min_announced_frames->nMinAnnouncedFrames = MIN_ANNOUNCED_FRAMES;
+        return 0;
+        break;
+    }
+
+    case VIDIOC_G_SUPPORTED_LANE_COUNTS: {
+
+        struct v4l2_supported_lane_counts *lane_counts = arg;
+
+        lane_counts->nSupportedLaneCounts =
+            V4L2_LANE_COUNT_1_LaneSupport |
+            V4L2_LANE_COUNT_2_LaneSupport |
+            V4L2_LANE_COUNT_4_LaneSupport;
+
+        return 0;
+    }
+	case VIDIOC_G_CSI_HOST_CLK_FREQ: {
+        struct v4l2_csi_host_clock_freq_ranges *csi_clk_ranges = arg;
+
+        csi_clk_ranges->lane_range_1.nValid =
+            csi_clk_ranges->lane_range_2.nValid =
+            csi_clk_ranges->lane_range_4.nValid = 1;
+        csi_clk_ranges->lane_range_1.nMin =
+            csi_clk_ranges->lane_range_2.nMin =
+            csi_clk_ranges->lane_range_4.nMin =
+                    CSI_HOST_CLK_MIN_FREQ;
+        csi_clk_ranges->lane_range_1.nMax =
+            csi_clk_ranges->lane_range_2.nMax =
+            csi_clk_ranges->lane_range_4.nMax =
+                    CSI_HOST_CLK_MAX_FREQ;
+
+        csi_clk_ranges->lane_range_3.nValid = 0;
+        return 0;
+        break;
+    }
+    case VIDIOC_G_IPU_RESTRICTIONS: {
+        struct v4l2_ipu_restrictions *ipu_restrictions = arg;
+
+        ipu_restrictions->ipu_x.nValid = 1;
+        ipu_restrictions->ipu_x.nMin   = FRAMESIZE_MIN_W;
+        ipu_restrictions->ipu_x.nMax   = FRAMESIZE_MAX_W;
+        ipu_restrictions->ipu_x.nInc   = FRAMESIZE_INC_W;
+        ipu_restrictions->ipu_y.nValid = 1;
+        ipu_restrictions->ipu_y.nMin   = FRAMESIZE_MIN_H;
+        ipu_restrictions->ipu_y.nMax   = FRAMESIZE_MAX_H;
+        ipu_restrictions->ipu_y.nInc   = FRAMESIZE_INC_H;
+        return 0;
+        break;
+    }
+    case VIDIOC_G_SUPPORTED_DATA_IDENTIFIERS: {
+        struct v4l2_csi_data_identifiers_inq *data_ids = arg;
+
+        data_ids->nDataIdentifiersInq1 = DATA_IDENTIFIER_INQ_1;
+        data_ids->nDataIdentifiersInq2 = DATA_IDENTIFIER_INQ_2;
+        data_ids->nDataIdentifiersInq3 = DATA_IDENTIFIER_INQ_3;
+        data_ids->nDataIdentifiersInq4 = DATA_IDENTIFIER_INQ_4;
+        return 0;
+        break;
+    }
+	}
+    if (!v4l2_subdev_has_op(sd, core, ioctl))
+        return -ENOTTY;
 
     return v4l2_subdev_call(sd, core, ioctl, cmd, arg);
+}
+
+int mxc_isi_cap_ioctl_qbuf(struct file *file, void *priv, struct v4l2_buffer *p)
+{
+	struct v4l2_fh *vfh = file->private_data;
+	struct video_device *vdev = vfh->vdev;
+	struct mxc_isi_dev *mxc_isi = video_drvdata(file);
+	struct mxc_isi_frame *dst_f = &mxc_isi->isi_cap.dst_f;
+	int ret = 0;
+
+	/* Mono8 workaround */
+	if(dst_f->fmt->fourcc == V4L2_PIX_FMT_GREY)
+	{
+		p->length = 2;
+	}
+
+	ret = vb2_ioctl_qbuf(file, priv, p);
+
+	/* Mono8 workaround */
+	if(dst_f->fmt->fourcc == V4L2_PIX_FMT_GREY)
+	{
+		p->length = 1;
+	} 
+
+	if (ret < 0)
+		return ret;
+
+	vdev->qbuf_count++;
+
+	return 0;
+}
+
+int mxc_isi_cap_ioctl_dqbuf(struct file *file, void *priv, struct v4l2_buffer *p)
+{
+	struct v4l2_fh *vfh = file->private_data;
+	struct video_device *vdev = vfh->vdev;
+	struct mxc_isi_dev *mxc_isi = video_drvdata(file);
+	struct mxc_isi_frame *dst_f = &mxc_isi->isi_cap.dst_f;
+	int ret = 0;
+
+	/* Mono8 workaround */
+	if(dst_f->fmt->fourcc == V4L2_PIX_FMT_GREY)
+	{
+		p->length = 2;
+	}
+
+	ret = vb2_ioctl_dqbuf(file, priv, p);
+
+	/* Mono8 workaround */
+	if(dst_f->fmt->fourcc == V4L2_PIX_FMT_GREY)
+	{
+		p->length = 1;
+	}
+
+	if (ret < 0)
+		return ret;
+
+	vdev->dqbuf_count++;
+
+	return 0;
+}
+
+static int mxc_isi_cap_ioctl_querybuf(struct file *file, void *priv, struct v4l2_buffer *p)
+{
+	struct mxc_isi_dev *mxc_isi = video_drvdata(file);
+	struct mxc_isi_frame *dst_f = &mxc_isi->isi_cap.dst_f;
+	int ret = 0;
+
+	/* Mono8 workaround */
+	if(dst_f->fmt->fourcc == V4L2_PIX_FMT_GREY)
+	{
+		p->length = 2;
+	}
+
+	ret = vb2_ioctl_querybuf(file, priv, p);
+
+	/* Mono8 workaround */
+	if(dst_f->fmt->fourcc == V4L2_PIX_FMT_GREY)
+	{
+		p->length = 1;
+	}
+
+	return ret;
 }
 
 static const struct v4l2_ioctl_ops mxc_isi_capture_ioctl_ops = {
@@ -1573,9 +1895,9 @@ static const struct v4l2_ioctl_ops mxc_isi_capture_ioctl_ops = {
 	.vidioc_g_fmt_vid_cap_mplane	= mxc_isi_cap_g_fmt_mplane,
 
 	.vidioc_reqbufs			= vb2_ioctl_reqbufs,
-	.vidioc_querybuf		= vb2_ioctl_querybuf,
-	.vidioc_qbuf			= vb2_ioctl_qbuf,
-	.vidioc_dqbuf			= vb2_ioctl_dqbuf,
+	.vidioc_querybuf		= mxc_isi_cap_ioctl_querybuf,
+	.vidioc_qbuf			= mxc_isi_cap_ioctl_qbuf,
+	.vidioc_dqbuf			= mxc_isi_cap_ioctl_dqbuf,
 	.vidioc_expbuf			= vb2_ioctl_expbuf,
 	.vidioc_prepare_buf		= vb2_ioctl_prepare_buf,
 	.vidioc_create_bufs		= vb2_ioctl_create_bufs,
@@ -1689,7 +2011,7 @@ static int mxc_isi_subdev_get_fmt(struct v4l2_subdev *sd,
 {
 	struct mxc_isi_dev *mxc_isi = v4l2_get_subdevdata(sd);
 	struct mxc_isi_frame *f;
-	struct v4l2_mbus_framefmt *mf;
+	struct v4l2_mbus_framefmt *mf = &fmt->format;
 
 	mutex_lock(&mxc_isi->lock);
 
@@ -1883,6 +2205,9 @@ static int mxc_isi_register_cap_device(struct mxc_isi_dev *mxc_isi,
 	dev_dbg(&mxc_isi->pdev->dev, "%s\n", __func__);
 	memset(vdev, 0, sizeof(*vdev));
 	snprintf(vdev->name, sizeof(vdev->name), "mxc_isi.%d.capture", mxc_isi->id);
+
+	/* Reset flush state, because new buffers are enqueued */
+	update_flush_state(mxc_isi, FLUSH_NOT_INITIATED);
 
 	vdev->fops	= &mxc_isi_capture_fops;
 	vdev->ioctl_ops	= &mxc_isi_capture_ioctl_ops;

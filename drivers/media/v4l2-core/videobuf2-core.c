@@ -414,6 +414,22 @@ static void __vb2_free_mem(struct vb2_queue *q, unsigned int buffers)
 	}
 }
 
+static void __vb2_free_mem_single(struct vb2_queue *q, unsigned int index)
+{
+    struct vb2_buffer *vb;
+
+    vb = q->bufs[index];
+    if (!vb)
+        return;
+
+    if (q->memory == VB2_MEMORY_MMAP)
+        __vb2_buf_mem_free(vb);
+    else if (q->memory == VB2_MEMORY_DMABUF)
+        __vb2_buf_dmabuf_put(vb);
+    else
+        __vb2_buf_userptr_put(vb);
+}
+
 /**
  * __vb2_queue_free() - free buffers at the end of the queue - video memory and
  * related information, if no buffers are left return the queue to an
@@ -529,6 +545,44 @@ static int __vb2_queue_free(struct vb2_queue *q, unsigned int buffers)
 	}
 	return 0;
 }
+
+int vb2_buffer_free(struct vb2_queue *q, unsigned int index)
+{
+    struct vb2_buffer *vb = q->bufs[index];
+
+    /*
+     * Sanity check: when preparing a buffer the queue lock is released for
+     * a short while (see __buf_prepare for the details), which would allow
+     * a race with a reqbufs which can call this function. Removing the
+     * buffers from underneath __buf_prepare is obviously a bad idea, so we
+     * check if any of the buffers is in the state PREPARING, and if so we
+     * just return -EAGAIN.
+     */
+    if (q->bufs[index] == NULL)
+            return -EINVAL;
+
+    if (q->bufs[index]->state == VB2_BUF_STATE_PREPARING) {
+        dprintk(1, "preparing buffers, cannot free\n");
+        return -EAGAIN;
+    }
+
+    if (vb && vb->planes[0].mem_priv)
+        call_void_vb_qop(vb, buf_cleanup, vb);
+
+    /* Release video buffer memory */
+    __vb2_free_mem_single(q, index);
+
+    kfree(q->bufs[index]);
+    q->bufs[index] = NULL;
+
+    q->num_buffers--;
+    if (!q->num_buffers) {
+        q->memory = 0;
+        INIT_LIST_HEAD(&q->queued_list);
+    }
+    return 0;
+}
+EXPORT_SYMBOL_GPL(vb2_buffer_free);
 
 bool vb2_buffer_in_use(struct vb2_queue *q, struct vb2_buffer *vb)
 {
@@ -781,11 +835,14 @@ EXPORT_SYMBOL_GPL(vb2_core_reqbufs);
 
 int vb2_core_create_bufs(struct vb2_queue *q, enum vb2_memory memory,
 		unsigned int *count, unsigned requested_planes,
-		const unsigned requested_sizes[])
+		const unsigned requested_sizes[], bool req_index, int index)
 {
 	unsigned int num_planes = 0, num_buffers, allocated_buffers;
 	unsigned plane_sizes[VB2_MAX_PLANES] = { };
 	int ret;
+
+	if (req_index && q->num_buffers > index)
+	    return 0;
 
 	if (q->num_buffers == VB2_MAX_FRAME) {
 		dprintk(1, "maximum number of buffers already allocated\n");

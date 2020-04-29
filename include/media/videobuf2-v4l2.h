@@ -73,6 +73,14 @@ int vb2_reqbufs(struct vb2_queue *q, struct v4l2_requestbuffers *req);
 int vb2_create_bufs(struct vb2_queue *q, struct v4l2_create_buffers *create);
 
 /**
+ * vb2_buffer_free() - Free single vb2 buffer
+ *
+ * @q:      videobuf2 queue
+ * @index:  index of the buffer to be freed
+ */
+int vb2_buffer_free(struct vb2_queue *q, unsigned int index);
+
+/**
  * vb2_prepare_buf() - Pass ownership of a buffer from userspace to the kernel
  *
  * @q:		videobuf2 queue

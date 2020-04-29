@@ -47,6 +47,7 @@ struct avt_csi2_priv {
 	struct v4l2_ctrl_config		ctrl_cfg[AVT_MAX_CTRLS];
 	struct v4l2_ctrl		*ctrls[AVT_MAX_CTRLS];
 
+	bool is_open;
 	bool stream_on;
 	bool cross_update;
 	bool write_handshake_available;
@@ -126,10 +127,6 @@ struct avt_ctrl {
 #define GCPRM_MAJOR_VERSION	0x0001
 #define GCPRM_MINOR_VERSION	0x0000
 
-/* D-PHY 1.2 clock frequency range (up to 2.5 Gbps per lane, DDR) */
-#define CSI_HOST_CLK_MIN_FREQ	40000000
-#define CSI_HOST_CLK_MAX_FREQ	1250000000
-
 /* MIPI CSI-2 data types */
 #define MIPI_DT_YUV420		0x18 /* YYY.../UYVY.... */
 #define MIPI_DT_YUV420_LEGACY	0x1a /* UYY.../VYY...   */
@@ -174,7 +171,6 @@ enum convert_type {
 
 #define EXP_ABS		100000UL
 #define UHZ_TO_HZ	1000000UL
-#define FRAQ_NUM	1000
 
 #define CCI_REG_LAYOUT_MINVER_MASK (0x0000ffff)
 #define CCI_REG_LAYOUT_MINVER_SHIFT (0)

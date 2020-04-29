@@ -3,6 +3,11 @@
 
 #include <linux/videodev2.h>
 
+/* Driver interface version */
+#define	MAJOR_DRV_IF        1
+#define	MINOR_DRV_IF        0
+#define	PATCH_DRV_IF        7
+
 struct v4l2_i2c {
 	__u32			reg;
 	__u32			timeout;
@@ -51,7 +56,8 @@ struct v4l2_range
 
 /* D-PHY 1.2 clock frequency range (up to 2.5 Gbps per lane, DDR) */
 #define CSI_HOST_CLK_MIN_FREQ	40000000
-#define CSI_HOST_CLK_MAX_FREQ	1250000000
+#define CSI_HOST_CLK_MAX_FREQ		750000000
+#define CSI_HOST_CLK_MAX_FREQ_4L	735000000
 
 struct v4l2_csi_host_clock_freq_ranges
 {
@@ -141,6 +147,77 @@ struct v4l2_streamoff_ex
     __u32 timeout;                  // Timeout value in ms
 };
 
+/* Available driver capability flags */
+#define AVT_DRVCAP_USRPTR   0x00000001
+#define AVT_DRVCAP_MMAP     0x00000002
+
+struct v4l2_csi_driver_info
+{
+    union _id
+    {
+        __u32 board_id;
+        struct
+        {
+            __u8 manufacturer_id;
+            __u8 soc_family_id;
+            __u8 driver_id;
+            __u8 reserved;
+        };
+    }id;
+
+    __u32 driver_version;               // Driver version
+    __u32 driver_interface_version;     // Used driver specification version
+    __u32 driver_caps;                  // Driver capabilities flags
+    __u32 usrptr_alignment;             // Buffer alignment for user pointer mode in bytes
+};
+
+enum manufacturer_id
+{
+    MANUFACTURER_ID_NXP         = 0x00,
+    MANUFACTURER_ID_NVIDIA      = 0x01,
+};
+
+enum soc_family_id
+{
+    SOC_FAMILY_ID_IMX6          = 0x00,
+    SOC_FAMILY_ID_TEGRA         = 0x01,
+    SOC_FAMILY_ID_IMX8          = 0x02,
+    SOC_FAMILY_ID_IMX8M         = 0x03,
+    SOC_FAMILY_ID_IMX8X         = 0x04,
+};
+
+enum imx6_driver_id
+{
+    IMX6_DRIVER_ID_NITROGEN     = 0x00,
+    IMX6_DRIVER_ID_WANDBOARD    = 0x01,
+};
+
+enum tegra_driver_id
+{
+    TEGRA_DRIVER_ID_DEFAULT     = 0x00,
+};
+
+enum imx8_driver_id
+{
+    IMX8_DRIVER_ID_DEFAULT      = 0x00,
+};
+
+enum imx8m_driver_id
+{
+    IMX8M_DRIVER_ID_DEFAULT     = 0x00,
+};
+
+enum imx8x_driver_id
+{
+    IMX8X_DRIVER_ID_DEFAULT     = 0x00,
+};
+
+struct v4l2_csi_config
+{
+    __u8 lane_count;
+    __u32 csi_clock;
+};
+
 #define VIDIOC_R_I2C                        _IOWR('V', BASE_VIDIOC_PRIVATE + 0,  struct v4l2_i2c)
 #define VIDIOC_W_I2C                        _IOWR('V', BASE_VIDIOC_PRIVATE + 1,  struct v4l2_i2c)
 #define VIDIOC_MEM_ALLOC                    _IOWR('V', BASE_VIDIOC_PRIVATE + 2,  struct v4l2_dma_mem)
@@ -158,6 +235,9 @@ struct v4l2_streamoff_ex
 #define VIDIOC_G_GENCP_BUFFER_SIZES         _IOWR('V', BASE_VIDIOC_PRIVATE + 14, struct v4l2_gencp_buffer_sizes)
 #define VIDIOC_G_SUPPORTED_DATA_IDENTIFIERS _IOWR('V', BASE_VIDIOC_PRIVATE + 15, struct v4l2_csi_data_identifiers_inq)
 #define VIDIOC_G_I2C_CLOCK_FREQ             _IOWR('V', BASE_VIDIOC_PRIVATE + 16, int)
+#define VIDIOC_G_DRIVER_INFO                _IOR('V', BASE_VIDIOC_PRIVATE + 17, struct v4l2_csi_driver_info)
+#define VIDIOC_G_CSI_CONFIG                 _IOR('V', BASE_VIDIOC_PRIVATE + 18, struct v4l2_csi_config)
+#define VIDIOC_S_CSI_CONFIG                 _IOWR('V', BASE_VIDIOC_PRIVATE + 19, struct v4l2_csi_config)
 
 #endif  /* __AVT_CSI2_IOCTL_H */
 

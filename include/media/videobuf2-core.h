@@ -534,6 +534,8 @@ struct vb2_queue {
 
 	struct list_head		queued_list;
 	unsigned int			queued_count;
+	uint64_t				qbuf_count;
+	uint64_t				dqbuf_count;
 
 	atomic_t			owned_by_drv_count;
 	struct list_head		done_list;
@@ -542,6 +544,7 @@ struct vb2_queue {
 
 	struct device			*alloc_devs[VB2_MAX_PLANES];
 
+	unsigned int			streamoff_state:2;
 	unsigned int			streaming:1;
 	unsigned int			start_streaming_called:1;
 	unsigned int			error:1;
@@ -699,7 +702,7 @@ int vb2_core_reqbufs(struct vb2_queue *q, enum vb2_memory memory,
  */
 int vb2_core_create_bufs(struct vb2_queue *q, enum vb2_memory memory,
 			 unsigned int *count, unsigned int requested_planes,
-			 const unsigned int requested_sizes[]);
+			 const unsigned int requested_sizes[], bool req_index, int index);
 
 /**
  * vb2_core_prepare_buf() - Pass ownership of a buffer from userspace

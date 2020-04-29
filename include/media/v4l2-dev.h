@@ -244,6 +244,14 @@ struct video_device
 	u16 num;
 	unsigned long flags;
 	int index;
+	char if_name[32];
+	char bus_info[32];
+	char flush;
+	int open_count;
+
+	struct v4l2_stats_t *stream_stats;
+	uint64_t qbuf_count;
+	uint64_t dqbuf_count;
 
 	/* V4L2 file handles */
 	spinlock_t		fh_lock;

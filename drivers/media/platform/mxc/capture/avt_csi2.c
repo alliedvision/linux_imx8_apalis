@@ -5,9 +5,6 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; version 2 of the License.
  *
- * THE SOFTWARE IS PRELIMINARY AND STILL IN TESTING AND VERIFICATION PHASE AND IS PROVIDED ON AN “AS IS” AND “AS AVAILABLE” BASIS AND IS BELIEVED TO CONTAIN DEFECTS.
- * A PRIMARY PURPOSE OF THIS EARLY ACCESS IS TO OBTAIN FEEDBACK ON PERFORMANCE AND THE IDENTIFICATION OF DEFECT SOFTWARE, HARDWARE AND DOCUMENTATION.
- * 
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
  * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -26,6 +23,7 @@
 #include <linux/i2c.h>
 #include <linux/lcm.h>
 #include <linux/crc32.h>
+#include <linux/dma-mapping.h>
 #include <media/v4l2-ctrls.h>
 #include <media/v4l2-device.h>
 #include <media/v4l2-event.h>
@@ -51,7 +49,7 @@ module_param(debug, int, 0600);/* S_IRUGO */
 #define avt_info(dev, fmt, args...) \
 		v4l2_info(dev, "%s:%d: " fmt "", __func__, __LINE__, ##args) \
 
-#define DEFAULT_FPS 30
+#define DEFAULT_FPS 60
 
 #define AV_CAM_DEFAULT_FMT	MEDIA_BUS_FMT_VYUY8_2X8
 
@@ -68,6 +66,10 @@ static int avt_reg_read(struct i2c_client *client, __u32 reg,
 static int avt_init_mode(struct v4l2_subdev *sd);
 
 static int avt_init_frame_param(struct avt_csi2_priv *priv);
+
+static bool common_range(uint32_t nMin1, uint32_t nMax1, uint32_t nInc1,
+				uint32_t nMin2, uint32_t nMax2, uint32_t nInc2,
+				uint32_t *rMin, uint32_t *rMax, uint32_t *rInc);
 
 static void swapbytes(void *_object, size_t _size)
 {
@@ -102,7 +104,7 @@ static uint32_t i2c_read(struct i2c_client *client, uint32_t reg,
 	memset(msg, 0, sizeof(msg));
 
 	if (count > I2C_IO_LIMIT) {
-		dev_err(&client->dev, "Limit excedded! i2c_reg->count > I2C_IO_LIMIT\n");
+		dev_err(&client->dev, "Limit excedded! i2c_reg->count = %d > I2C_IO_LIMIT = %d\n", count, I2C_IO_LIMIT);
 		count = I2C_IO_LIMIT;
 	}
 
@@ -597,6 +599,14 @@ static int avt_ctrl_send(struct i2c_client *client,
 
 		feature_inquiry_reg.value = avail_mipi;
 
+		if (avail_mipi == 0)
+		{
+			// No pixel formats -> Probablyfallback app runnning
+			// Fake it
+			dev_dbg(&client->dev, " No pixelformats available. Fallback app running?");
+			avail_mipi = 1 << 7; // RGB888
+		}
+
 		dev_dbg(&client->dev, "Feature Inquiry Reg value : 0x%llx\n",
 				avail_mipi);
 
@@ -1037,9 +1047,21 @@ long avt_csi2_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	struct i2c_client *client = v4l2_get_subdevdata(sd);
 	struct avt_csi2_priv *priv = avt_get_priv(sd);
 	struct v4l2_i2c *i2c_reg;
+	struct v4l2_csi_driver_info *info;
+	struct v4l2_csi_config *config;
+	uint32_t i2c_reg_address;
+	uint32_t i2c_reg_size;
+	uint32_t i2c_reg_count;
+	uint32_t clk;
 	char *i2c_reg_buf;
 	int *i2c_clk_freq;
 	struct v4l2_gencp_buffer_sizes *gencp_buf_sz;
+	uint8_t avt_supported_lane_counts = 0;
+	uint32_t avt_min_clk = 0;
+	uint32_t avt_max_clk = 0;
+	uint32_t common_min_clk = 0;
+	uint32_t common_max_clk = 0;
+	uint32_t common_inc_clk = 0;
 
 	avt_dbg(sd, "()\n");
 
@@ -1097,18 +1119,133 @@ long avt_csi2_ioctl(struct v4l2_subdev *sd, unsigned int cmd, void *arg)
 	case VIDIOC_G_I2C_CLOCK_FREQ:
 
 		i2c_clk_freq = arg;
-		*i2c_clk_freq = i2c_get_adapter_bus_clk_rate(client->adapter);
+		*i2c_clk_freq = 400000;
 		ret = 0;
 
 		break;
 
 	case VIDIOC_G_GENCP_BUFFER_SIZES:
 		gencp_buf_sz = arg;
-		gencp_buf_sz->nGenCPInBufferSize = priv->gencp_reg.gencp_in_buffer_size;
-		gencp_buf_sz->nGenCPOutBufferSize = priv->gencp_reg.gencp_out_buffer_size;
+		gencp_buf_sz->nGenCPInBufferSize = priv->gencp_reg.gencp_in_buffer_size > I2C_IO_LIMIT ? I2C_IO_LIMIT : priv->gencp_reg.gencp_in_buffer_size;
+		gencp_buf_sz->nGenCPOutBufferSize = priv->gencp_reg.gencp_out_buffer_size > I2C_IO_LIMIT ? I2C_IO_LIMIT : priv->gencp_reg.gencp_out_buffer_size;
 		ret = 0;
 		break;
 
+	case VIDIOC_G_DRIVER_INFO:
+		info = (struct v4l2_csi_driver_info *)arg;
+
+		info->id.manufacturer_id = MANUFACTURER_ID_NXP;
+		info->id.soc_family_id = SOC_FAMILY_ID_IMX8;
+		info->id.driver_id = IMX8_DRIVER_ID_DEFAULT;
+
+		info->driver_version = (MAJOR_DRV << 16) + (MINOR_DRV << 8) + PATCH_DRV;
+		info->driver_interface_version = (MAJOR_DRV_IF << 16) + (MINOR_DRV_IF << 8) + PATCH_DRV_IF;
+		info->driver_caps = AVT_DRVCAP_MMAP;
+		info->usrptr_alignment = dma_get_cache_alignment();
+
+		ret = 0;
+		break;
+
+	case VIDIOC_G_CSI_CONFIG:
+		config = (struct v4l2_csi_config *)arg;
+
+		config->lane_count = priv->numlanes;
+		config->csi_clock = priv->csi_clk_freq;
+
+		ret = 0;
+		break;
+
+	case VIDIOC_S_CSI_CONFIG:
+		config = (struct v4l2_csi_config *)arg;
+
+		/* Set number of lanes */
+		priv->numlanes = config->lane_count;
+
+		ret = avt_reg_read(priv->client,
+				priv->cci_reg.bcrm_addr + SUPPORTED_CSI2_LANE_COUNTS_8R,
+				AV_CAM_REG_SIZE, AV_CAM_DATA_SIZE_8,
+				(char *) &avt_supported_lane_counts);
+		if (ret < 0) {
+			avt_err(sd, "i2c read failed (%d)\n", ret);
+			ret = -1;
+			break;
+		}
+		if(!(test_bit(priv->numlanes - 1, (const long *)(&avt_supported_lane_counts)))) {
+			avt_err(sd, "requested number of lanes (%u) not supported by this camera!\n",
+					priv->numlanes);
+			ret = -1;
+			break;
+		}
+		ret = avt_reg_write(priv->client,
+				priv->cci_reg.bcrm_addr + CSI2_LANE_COUNT_8RW,
+				priv->numlanes);
+		if (ret < 0){
+			avt_err(sd, "i2c write failed (%d)\n", ret);
+			ret = -1;
+			break;
+		}
+		//priv->numlanes = priv->s_data->numlanes;
+
+		/* Set CSI clock frequency */
+
+		ret = avt_reg_read(priv->client,
+				priv->cci_reg.bcrm_addr + CSI2_CLOCK_MIN_32R,
+				AV_CAM_REG_SIZE, AV_CAM_DATA_SIZE_32,
+				(char *) &avt_min_clk);
+	
+		if (ret < 0) {
+			avt_err(sd, "i2c read failed (%d)\n", ret);
+			ret = -1;
+			break;
+		}
+	
+		ret = avt_reg_read(priv->client,
+				priv->cci_reg.bcrm_addr + CSI2_CLOCK_MAX_32R,
+				AV_CAM_REG_SIZE, AV_CAM_DATA_SIZE_32,
+				(char *) &avt_max_clk);
+	
+		if (ret < 0) {
+			avt_err(sd, "i2c read failed (%d)\n", ret);
+			ret = -1;
+			break;
+		}
+
+		if (common_range(avt_min_clk, avt_max_clk, 1,
+				config->csi_clock, config->csi_clock, 1,
+				&common_min_clk, &common_max_clk, &common_inc_clk)
+				== false) {
+			avt_err(sd, "clock value does not fit the supported frequency range!\n");
+			return -EINVAL;
+		}
+
+		CLEAR(i2c_reg_address);
+		clk = config->csi_clock;
+		swapbytes(&clk, AV_CAM_DATA_SIZE_32);
+		i2c_reg_address = priv->cci_reg.bcrm_addr + CSI2_CLOCK_32RW;
+		i2c_reg_size = AV_CAM_REG_SIZE;
+		i2c_reg_count = AV_CAM_DATA_SIZE_32;
+		i2c_reg_buf = (char *) &clk;
+		ret = ioctl_gencam_i2cwrite_reg(priv->client, i2c_reg_address, i2c_reg_size,
+						i2c_reg_count, i2c_reg_buf);
+		if (ret < 0) {
+			avt_err(sd, "i2c write failed (%d)\n", ret);
+			ret = -1;
+			break;
+		}
+
+		/* Read back CSI clock frequency */
+		ret = avt_reg_read(priv->client,
+				priv->cci_reg.bcrm_addr + CSI2_CLOCK_32RW,
+				AV_CAM_REG_SIZE, AV_CAM_DATA_SIZE_32,
+				(char *) &priv->csi_clk_freq);
+
+		if (ret < 0) {
+			avt_err(sd, "i2c read failed (%d)\n", ret);
+			ret = -1;
+			break;
+		}
+		ret = 0;
+		break;
 
 	default:
 		break;
@@ -1459,8 +1596,8 @@ static int avt_csi2_enum_frameintervals(struct v4l2_subdev *sd,
 	/* Translate frequency to timeperframe
 	* by inverting the fraction
 	*/
-	tpf.numerator = FRAQ_NUM;
-	tpf.denominator = (framerate * FRAQ_NUM) / UHZ_TO_HZ;
+	tpf.numerator = UHZ_TO_HZ;
+	tpf.denominator = framerate;
 
 	fie->interval = tpf;
 
@@ -1769,6 +1906,23 @@ static int ioctl_queryctrl(struct v4l2_subdev *sd,
 	case V4L2_CID_EXPOSURE_ABSOLUTE:
 		avt_dbg(sd, "case V4L2_CID_EXPOSURE_ABSOLUTE\n");
 
+		/* reading the Exposure time */
+		ret = avt_reg_read(client,
+				priv->cci_reg.bcrm_addr + EXPOSURE_TIME_64RW,
+				AV_CAM_REG_SIZE, AV_CAM_DATA_SIZE_64,
+				(char *) &value64);
+		if (ret < 0) {
+			avt_err(sd, "EXPOSURE_TIME_64RW: i2c read failed (%d)\n",
+					ret);
+			return ret;
+		}
+
+		/* convert unit [ns] to [100*us] */
+		value64 = value64 / 100000UL;
+		
+		/* clamp to s32 max */
+		qctrl->default_value = clamp(value64, (u64)0, (u64)S32_MAX);
+
 		/* reading the Maximum Exposure time */
 		ret = avt_reg_read(client,
 				priv->cci_reg.bcrm_addr + EXPOSURE_TIME_MAX_64R,
@@ -1780,12 +1934,13 @@ static int ioctl_queryctrl(struct v4l2_subdev *sd,
 			return ret;
 		}
 
-		qctrl->maximum = (__s32) value64;
-		if (qctrl->maximum != 0)
-			do_div(qctrl->maximum, 100000UL);
+		/* convert unit [ns] to [100*us] */
+		value64 = value64 / 100000UL;
+		
+		/* clamp to s32 max */
+		qctrl->maximum = clamp(value64, (u64)0, (u64)S32_MAX);
 
 		qctrl->minimum = 1;
-		qctrl->default_value = 1;
 		qctrl->step = 1;
 		qctrl->type = V4L2_CTRL_TYPE_INTEGER64;
 
@@ -2389,6 +2544,12 @@ static int ioctl_queryctrl(struct v4l2_subdev *sd,
 	case V4L2_CID_RED_BALANCE:
 		avt_dbg(sd, "case V4L2_CID_RED_BALANCE\n");
 
+		if (!feature_inquiry_reg.feature_inq.white_balance_avail) {
+			avt_info(sd, "control 'Red balance' not supported by firmware\n");
+			qctrl->flags = V4L2_CTRL_FLAG_DISABLED;
+			return 0;
+		}
+
 		/* reading the Red balance value */
 		ret = avt_reg_read(client,
 				priv->cci_reg.bcrm_addr + RED_BALANCE_RATIO_64RW,
@@ -2467,6 +2628,12 @@ static int ioctl_queryctrl(struct v4l2_subdev *sd,
 
 	case V4L2_CID_BLUE_BALANCE:
 		avt_dbg(sd, "case V4L2_CID_BLUE_BALANCE\n");
+
+		if (!feature_inquiry_reg.feature_inq.white_balance_avail) {
+			avt_info(sd, "control 'Blue balance' not supported by firmware\n");
+			qctrl->flags = V4L2_CTRL_FLAG_DISABLED;
+			return 0;
+		}
 
 		/* reading the Blue balance value */
 		ret = avt_reg_read(client,
@@ -3583,8 +3750,8 @@ static int avt_s_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *parm)
 		return ret;
 	}
 
-	tpf->numerator = FRAQ_NUM;
-	tpf->denominator = value64 / FRAQ_NUM;
+	tpf->numerator = UHZ_TO_HZ;
+	tpf->denominator = value64;
 
 	/* Copy modified settings back */
 	memcpy(&parm->parm.capture, &priv->streamcap, sizeof(struct v4l2_captureparm));
@@ -3604,8 +3771,13 @@ static int avt_g_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *parm)
 
 static int avt_csi2_close(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 {
+	struct avt_csi2_priv *priv = avt_get_priv(sd);
+
 	// stop the stream
-	return avt_csi2_s_stream(sd, false);
+	int ret = avt_csi2_s_stream(sd, false);
+
+	priv->is_open = false;
+	return ret;
 }
 
 static int avt_csi2_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
@@ -3618,6 +3790,10 @@ static int avt_csi2_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	uint32_t i2c_reg_count;
 	uint8_t bcm_mode = 0;
 	char *i2c_reg_buf;;
+
+	if(priv->is_open) {
+		return -EBUSY;
+	}
 
 #if 0
 	// set stride align
@@ -3642,6 +3818,7 @@ static int avt_csi2_open(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 		return ret;
 	}
 	priv->mode = AVT_BCRM_MODE;
+	priv->is_open = true;
 
 	return 0;
 }
@@ -3778,6 +3955,66 @@ static int read_cci_registers(struct i2c_client *client)
 	return 0;
 }
 
+static int read_gencp_registers(struct i2c_client *client)
+{
+	struct avt_csi2_priv *priv = to_avt_csi2(client);
+
+	int ret = 0;
+	uint32_t crc = 0;
+	uint32_t crc_byte_count = 0;
+
+	uint32_t i2c_reg;
+	uint32_t i2c_reg_size;
+	uint32_t i2c_reg_count;
+
+	char *i2c_reg_buf;
+
+	i2c_reg = priv->cci_reg.gcprm_address + 0x0000;
+	i2c_reg_size = AV_CAM_REG_SIZE;
+	i2c_reg_count = sizeof(priv->gencp_reg);
+	i2c_reg_buf = (char *)&priv->gencp_reg;
+
+	/* Calculate CRC from each reg up to the CRC reg */
+	crc_byte_count =
+		(uint32_t)((char *)&priv->gencp_reg.checksum - (char *)&priv->gencp_reg);
+
+	ret = i2c_read(client, i2c_reg, i2c_reg_size,
+			i2c_reg_count, i2c_reg_buf);
+
+	crc = crc32(U32_MAX, &priv->gencp_reg, crc_byte_count);
+
+	if (ret < 0) {
+		pr_err("%s : I2C read failed, ret %d\n", __func__, ret);
+		return ret;
+	}
+
+	be32_to_cpus(&priv->gencp_reg.gcprm_layout_version);
+	be16_to_cpus(&priv->gencp_reg.gencp_out_buffer_address);
+	be16_to_cpus(&priv->gencp_reg.gencp_in_buffer_address);
+	be16_to_cpus(&priv->gencp_reg.gencp_out_buffer_size);
+	be16_to_cpus(&priv->gencp_reg.gencp_in_buffer_size);
+	be32_to_cpus(&priv->gencp_reg.checksum);
+
+	if (crc != priv->gencp_reg.checksum) {
+		dev_warn(&client->dev,
+			"wrong GENCP CRC value! calculated = 0x%x, received = 0x%x\n",
+			crc, priv->gencp_reg.checksum);
+	}
+
+	dev_info(&client->dev, "gcprm layout version: %x\n",
+		priv->gencp_reg.gcprm_layout_version);
+	dev_info(&client->dev, "gcprm out buf addr: %x\n",
+		priv->gencp_reg.gencp_out_buffer_address);
+	dev_info(&client->dev, "gcprm out buf size: %x\n",
+		priv->gencp_reg.gencp_out_buffer_size);
+	dev_info(&client->dev, "gcprm in buf addr: %x\n",
+		priv->gencp_reg.gencp_in_buffer_address);
+	dev_info(&client->dev, "gcprm in buf size: %x\n",
+		priv->gencp_reg.gencp_in_buffer_size);
+
+	return 0;
+}
+
 static int cci_version_check(struct i2c_client *client)
 {
 	struct avt_csi2_priv *priv = to_avt_csi2(client);
@@ -3848,6 +4085,24 @@ static ssize_t availability_show(struct device *dev,
 	struct avt_csi2_priv *priv = to_avt_csi2(to_i2c_client(dev));
 
 	return sprintf(buf, "%d\n", priv->stream_on ? 1 : 0);
+}
+
+static int gcprm_version_check(struct i2c_client *client)
+{
+	struct avt_csi2_priv *priv = to_avt_csi2(client);
+	u32 value = priv->gencp_reg.gcprm_layout_version;
+
+	dev_info(&client->dev, "gcprm version (driver): 0x%x (maj: 0x%x min: 0x%x)\n",
+						GCPRM_DEVICE_VERSION,
+						GCPRM_MAJOR_VERSION,
+						GCPRM_MINOR_VERSION);
+
+	dev_info(&client->dev, "gcprm version (camera): 0x%x (maj: 0x%x min: 0x%x)\n",
+						value,
+						(value & 0xffff0000) >> 16,
+						(value & 0x0000ffff));
+
+	return (value & 0xffff0000) >> 16 == GCPRM_MAJOR_VERSION ? 1 : 0;
 }
 
 static ssize_t cci_register_layout_version_show(struct device *dev,
@@ -4284,6 +4539,12 @@ static int avt_read_fmt_from_device(struct v4l2_subdev *sd, uint32_t *fmt)
 					return -EINVAL;
 				}
 			break;
+
+		case	0:
+			dev_warn(&client->dev, "Invalid pixelformat detected: avt_img_fmt=0x%x. Fallback app running?", avt_img_fmt);
+			avt_img_fmt = MEDIA_BUS_FMT_RGB888_1X24;
+			break;
+
 		default:
 			dev_err(&client->dev, "%s:Unknown pixelformat read, avt_img_fmt 0x%x\n",
 					__func__, avt_img_fmt);
@@ -4304,6 +4565,7 @@ static int avt_init_mode(struct v4l2_subdev *sd)
 	uint32_t common_inc_clk = 0;
 	uint32_t avt_min_clk = 0;
 	uint32_t avt_max_clk = 0;
+	uint32_t host_max_clk = 0;
 	uint8_t avt_supported_lane_counts = 0;
 
 	uint32_t i2c_reg;
@@ -4362,12 +4624,18 @@ static int avt_init_mode(struct v4l2_subdev *sd)
 		return ret;
 	}
 
+	if (priv->numlanes == 4) {
+		host_max_clk = CSI_HOST_CLK_MAX_FREQ_4L;
+	} else {
+		host_max_clk = CSI_HOST_CLK_MAX_FREQ;
+	}
+
 	avt_dbg(sd, "csi clock camera range: %d:%d Hz, host range: %d:%d Hz\n",
 		avt_min_clk, avt_max_clk,
-		CSI_HOST_CLK_MIN_FREQ, CSI_HOST_CLK_MAX_FREQ);
+		CSI_HOST_CLK_MIN_FREQ, host_max_clk);
 
 	if (common_range(avt_min_clk, avt_max_clk, 1,
-			CSI_HOST_CLK_MIN_FREQ, CSI_HOST_CLK_MAX_FREQ, 1,
+			CSI_HOST_CLK_MIN_FREQ, host_max_clk, 1,
 			&common_min_clk, &common_max_clk, &common_inc_clk)
 			== false) {
 		avt_err(sd, "no common clock range for camera and host possible!\n");
@@ -4455,8 +4723,6 @@ static int avt_csi2_probe(struct i2c_client *client,
 	struct avt_csi2_priv *priv;
 	struct device *dev = &client->dev;
 	int ret;
-	u64 framerate;
-	struct v4l2_fract *tpf;
 
 	struct v4l2_fwnode_endpoint *endpoint;
 	struct fwnode_handle *ep;
@@ -4514,6 +4780,7 @@ static int avt_csi2_probe(struct i2c_client *client,
 	priv->streamcap.capability = V4L2_MODE_HIGHQUALITY |
 					V4L2_CAP_TIMEPERFRAME;
 	priv->streamcap.capturemode = 0;
+	/* Set 60/1 Fps at the camera start */
 	priv->streamcap.timeperframe.denominator = DEFAULT_FPS;
 	priv->streamcap.timeperframe.numerator = 1;
 
@@ -4547,16 +4814,6 @@ static int avt_csi2_probe(struct i2c_client *client,
 
 	avt_init_avail_formats(&priv->subdev);
 
-	ret = avt_reg_read(client,
-			priv->cci_reg.bcrm_addr +
-			ACQUISITION_FRAME_RATE_64RW,
-			AV_CAM_REG_SIZE, AV_CAM_DATA_SIZE_64,
-			(char *) &framerate);
-	if (ret < 0) {
-		dev_err(&client->dev, "read frameinterval failed\n");
-		return ret;
-	}
-
 	/* reading the Firmware Version register */
 	ret = avt_reg_read(client,
 			priv->cci_reg.bcrm_addr + FIRMWARE_VERSION_REG_64R,
@@ -4570,17 +4827,10 @@ static int avt_csi2_probe(struct i2c_client *client,
 						(value64 & 0xff000000) >> 24,
 						ret);
 
-	/* Translate frequency to timeperframe
-	 * by inverting the fraction
-	 */
-	tpf = &(priv->streamcap.timeperframe);
-	tpf->numerator = FRAQ_NUM;
-	tpf->denominator = (framerate * FRAQ_NUM) / UHZ_TO_HZ;
-
 	device_caps.value = priv->cci_reg.device_capabilities;
 
 //TODO: GENCP
-#if 0
+
 	if (device_caps.caps.gencp) {
 		ret = read_gencp_registers(client);
 		if (ret < 0) {
@@ -4597,7 +4847,7 @@ static int avt_csi2_probe(struct i2c_client *client,
 
 		dev_dbg(&client->dev, "correct gcprm version\n");
 	}
-#endif
+
 
 	ret = sysfs_create_group(&dev->kobj, &avt_csi2_attr_grp);
     dev_err(dev, " -> %s: sysfs group created! (%d)\n", __func__, ret);
@@ -4666,6 +4916,7 @@ static int avt_csi2_probe(struct i2c_client *client,
 
 	priv->stream_on = false;
 	priv->cross_update = false;
+	priv->is_open = false;
 
 	ret = avt_init_mode(&priv->subdev);
 	if (ret < 0)

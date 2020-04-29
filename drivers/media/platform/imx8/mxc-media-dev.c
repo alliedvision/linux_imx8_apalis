@@ -319,7 +319,14 @@ static int subdev_notifier_bound(struct v4l2_async_notifier *notifier,
 static int subdev_notifier_complete(struct v4l2_async_notifier *notifier)
 {
 	struct mxc_md *mxc_md = notifier_to_mxc_md(notifier);
+	struct mxc_isi_dev *mxc_isi;
+	struct mxc_isi_cap_dev *isi_cap;
+	struct mxc_sensor_info *sensor;
+	struct video_device *vdev;
+	struct i2c_client *client;
+	int num_sensors = mxc_md->subdev_notifier.num_subdevs;
 	int ret;
+	int i, j;
 
 	dev_dbg(&mxc_md->pdev->dev, "%s\n", __func__);
 	mutex_lock(&mxc_md->media_dev.graph_mutex);
@@ -336,6 +343,26 @@ unlock:
 	if (ret < 0) {
 		v4l2_err(&mxc_md->v4l2_dev, "%s error exit\n", __func__);
 		return ret;
+	}
+
+	for (i = 0; i < MXC_ISI_MAX_DEVS; i++) {
+        mxc_isi = mxc_md->mxc_isi[i];
+        if (!mxc_isi)
+            continue;
+		isi_cap = &mxc_isi->isi_cap;
+		vdev = &isi_cap->vdev;
+		client = v4l2_get_subdevdata(&isi_cap->sd);
+
+		for (j = 0; j < num_sensors; j++) {
+			sensor = &mxc_md->sensor[j];
+			client = v4l2_get_subdevdata(sensor->sd);
+			sprintf(vdev->bus_info, "%d:%d:%x",
+					client->adapter->nr,
+					client->adapter->nr,
+					client->addr);
+			/* libcsi library requires interface with number 1 */
+			sprintf(vdev->if_name, "avt_csi2_if%d", j + 1);
+		}
 	}
 
 	return media_device_register(&mxc_md->media_dev);

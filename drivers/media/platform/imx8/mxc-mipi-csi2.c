@@ -574,7 +574,7 @@ static int mipi_csi2_s_stream(struct v4l2_subdev *sd, int enable)
 	} else {
 		if (csi2dev->running) {
 			mxc_mipi_csi2_disable(csi2dev);
-			csi2dev->running--;
+			csi2dev->running = 0;
 			pm_runtime_put(dev);
 		}
 	}
