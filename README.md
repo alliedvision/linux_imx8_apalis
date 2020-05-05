@@ -1,25 +1,3 @@
-# Beta Release
-
-Allied Vision CSI-2 Alvium Camera Driver
-
-This program is free software; you may redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation; version 2 of the License.
-
-THE SOFTWARE IS PRELIMINARY AND STILL IN TESTING AND VERIFICATION PHASE AND IS PROVIDED ON AN “AS IS” AND “AS AVAILABLE” BASIS AND IS BELIEVED TO CONTAIN DEFECTS.
-A PRIMARY PURPOSE OF THIS EARLY ACCESS IS TO OBTAIN FEEDBACK ON PERFORMANCE AND THE IDENTIFICATION OF DEFECT SOFTWARE, HARDWARE AND DOCUMENTATION.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
-BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
-ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-
----
-
 # Allied Vision MIPI CSI-2 driver for Toradex Apalis iMX8
 
 Driver for Allied Vision Alvium cameras with MIPI CSI-2 interface.   
@@ -35,44 +13,92 @@ Repository: https://git.toradex.com/cgit/linux-toradex.git
 Branch: toradex_4.14-2.0.x-imx
 Commit: f01f6885f1255ca634f361c97301b1d9f3aae170
 
-## Build instructions
+# Overview
+The following instructions describe how to install Torizon and the Allied Vision CSI-2 driver to your Toradex iMX8 Apalis board.
 
-Build environment: Cross-compiling on x86-64 Ubuntu (for example, version 18.04)
+## Prerequisites for cross-compiling
+### Host PC
+* The scripts require Git on the host PC.
+* We have tested the cross-compilation with Ubuntu 18.04 LTS and Debian 10.
+* Before cross-compiling the kernel, install all required packages.    
 
-1. Download Linaro aarch64 Cross-Compile Toolchain for x86_64 (to any directory on your host PC):
-  https://releases.linaro.org/components/toolchain/binaries/latest-7/aarch64-linux-gnu/
+Required packages for Ubuntu or Debian:   
+```sudo apt-get install libncurses-dev flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf gcc-aarch64-linux-gnu bc device-tree-compiler```
 
-2. Extract the archive:  
-    `$ tar -xf <linaro-archive>.tar.xz`
+# Cross-compiling the driver
 
-3. Clone the git repository and enter the folder.
+1. On the Linux host PC, clone the git repository   
+   ```$ git clone https://github.com/alliedvision/linux_imx8_apalis.git```
 
-4. Create deploy dir for collecting binaries:   
-    `$ mkdir deploy`
+2. Enter the directory "avt_build" in the directory   
+   ```$ cd linux_imx8_apalis/avt_build```
+   
+3. Run the build script to cross-compile all relevant binaries (kernel image, modules, device tree blob)   
+   ```$ ./build.sh```
+   
+4. The deploy subdirectory now contains "AlliedVision_Apalis_iMX8_Torizon_<git-rev>.tar.gz".   
+   Copy this file to the Apalis iMX8 board. Now you can proceed with installing the Alvium CSI-2 driver.
 
-5. Set environment variables:   
-    `$ export ARCH=arm64`   
-    `$ export INSTALL_MOD_PATH=deploy`   
-    `$ export CROSS_COMPILE=<cross-compile-prefix>`   
-     with cross-compile-prefix = <path-to-linaro-arm64-toolchain>/bin/aarch64-linux-gnu-
+# Installing the Alvium CSI-2 driver
+To install the binaries on the target Apalis iMX8 board:      
 
-6. Make kernel config:   
-    `$ make defconfig`
+1. Copy the kernel binaries to the iMX8 Apalis board (for example, via scp).
 
-7. Build the kernel image:   
-    `$ make Image dtbs modules -j$(nproc)`
+2. On the Apalis iMX8 board, extract the binaries:   
+   ```$ tar -zxvf <AlliedVision_Apalis_iMX8_Torizon_XXX.tar.gz>```
+   
+3. Enter the extracted directory:   
+   ```$ cd <AlliedVision_Apalis_iMX8_Torizon_XXX>```
+   
+4. To install everything on the board, run the installation script as superuser:   
+   ```$ sudo ./install.sh```
+   
+5. Reboot the board. Now the Alvium CSI-2 driver is installed.
 
-8. Copy binaries to the deploy folder:   
-    `$ make modules_install`   
-    `$ cp arch/arm64/boot/Image deploy`   
-    `$ cp arch/arm64/boot/dts/freescale/fsl-imx8qm-apalis.dtb deploy`   
+# Setting up a Debian container on Torizon
+## Downloading and starting the Toradex docker container
 
-The deploy folder now contains all relevant binaries.  
+To download and start the Toradex docker container for Debian, run:
+```
+$ docker run -e ACCEPT_FSL_EULA=1 -d --rm --name=alliedvision-container --net=host --cap-add CAP_SYS_TTY_CONFIG \
+             -v /dev:/dev -v /tmp:/tmp -v /run/udev/:/run/udev/ \
+             --device-cgroup-rule='c 4:* rmw'  --device-cgroup-rule='c 13:* rmw' --device-cgroup-rule='c 199:* rmw' --device-cgroup-rule='c 226:* rmw' --device=/dev/video0 \
+              torizon/arm64v8-debian-weston-vivante:buster --developer weston-launch --tty=/dev/tty7 --user=torizon
+```
 
-To install the new kernel and driver on Toradex Apalis iMX8:   
-1. On Toradex Apalis iMX8, replace the kernel image and device tree blob on the boot partition.   
-2. Copy the lib folder to the target's rootfs.
-3. Reboot the board.
+The paramater "--device=/dev/video0" makes sure that the video device can be accessed from within the container.
+If no camera is connected, remove the parameter because docker will complain that no such file exists (/dev/video0).   
+Details: https://developer.toradex.com/knowledge-base/debian-container-for-torizon#apalis-imx8colibri-imx8x
+
+## Configuring user rights
+By default, the user torizon in the container has no root rights. 
+To assign root rights:    
+
+1. In another session (serial or ssh), run the following command to login as root to the running container:   
+```$ docker exec -u root -t -i alliedvision-container /bin/bash```
+
+2. Add the user torizon to the group "sudo" and "video":   
+```# usermod -a -G sudo torizon```   
+```# usermod -a -G video torizon```   
+
+3. Set the password of the user torizon:   
+```# passwd torizon```
+
+4. Leave the bash running inside the container:   
+```# exit```
+
+5. To commmit the changes to the image, get the id of the running container:   
+```$ docker ps -a```
+
+6. Save the container as new image or overwrite the existing one:   
+```$ docker commit <container_id> new_image_name:tag_name```
+
+7. Reboot the system.   
+8. Run the command above (```$ docker run...```) to start the docker container (adjust the image name if you created a new one above).   
+In the command, replace the image name "torizon/arm64v8-debian-weston-vivante:buster" with the name of the new image.   
+
+The user torizon now has sudo rights and can install applications with ```sudo apt install ...```.
+
 
  ## Additional information
  :open_book:
