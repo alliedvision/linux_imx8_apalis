@@ -60,10 +60,14 @@ To install the binaries on the target Apalis iMX8 board:
 
 To download and start the Toradex docker container for Debian, run:
 ```
-$ docker run -e ACCEPT_FSL_EULA=1 -d --rm --name=alliedvision-container --net=host --cap-add CAP_SYS_TTY_CONFIG \
+$ docker run -e ACCEPT_FSL_EULA=1 -d --rm --name=alliedvision-container \
+			 --net=host --cap-add CAP_SYS_TTY_CONFIG \
              -v /dev:/dev -v /tmp:/tmp -v /run/udev/:/run/udev/ \
-             --device-cgroup-rule='c 4:* rmw'  --device-cgroup-rule='c 13:* rmw' --device-cgroup-rule='c 199:* rmw' --device-cgroup-rule='c 226:* rmw' --device=/dev/video0 \
-              torizon/arm64v8-debian-weston-vivante:buster --developer weston-launch --tty=/dev/tty7 --user=torizon
+             --device-cgroup-rule='c 4:* rmw'  --device-cgroup-rule='c 13:* rmw' \
+		     --device-cgroup-rule='c 199:* rmw' --device-cgroup-rule='c 226:* rmw' \
+			 --device=/dev/video0 \
+              torizon/arm64v8-debian-weston-vivante:buster --developer \
+			  weston-launch --tty=/dev/tty7 --user=torizon 
 ```
 
 The paramater "--device=/dev/video0" makes sure that the video device can be accessed from within the container.
