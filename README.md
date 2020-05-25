@@ -14,7 +14,8 @@ Branch: toradex_4.14-2.0.x-imx
 Commit: f01f6885f1255ca634f361c97301b1d9f3aae170
 
 # Overview
-The following instructions describe how to install Torizon and the Allied Vision CSI-2 driver to your Toradex iMX8 Apalis board.
+The following instructions describe how to install Torizon and the Allied Vision CSI-2 driver to your Toradex iMX8 Apalis board.  
+You can either download the pre-compiled binaries from https://www.alliedvision.com/en/products/software/embedded-software-and-drivers or compile them yourself.
 
 ## Prerequisites for cross-compiling
 ### Host PC
@@ -26,6 +27,7 @@ Required packages for Ubuntu or Debian:
 ```sudo apt-get install libncurses-dev flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf gcc-aarch64-linux-gnu bc device-tree-compiler```
 
 # Cross-compiling the driver
+If you want to use the pre-compiled binaries provided on our website, you can omit these steps.  
 
 1. On the Linux host PC, clone the git repository   
    ```$ git clone https://github.com/alliedvision/linux_imx8_apalis.git```
@@ -40,7 +42,8 @@ Required packages for Ubuntu or Debian:
    Copy this file to the Apalis iMX8 board. Now you can proceed with installing the Alvium CSI-2 driver.
 
 # Installing the Alvium CSI-2 driver
-To install the binaries on the target Apalis iMX8 board:      
+To install the binaries on the target Apalis iMX8 board:  
+Use the self-compiled binaries or download the pre-compiled binaries from our website https://www.alliedvision.com/en/products/software/embedded-software-and-drivers.   
 
 1. Copy the kernel binaries to the iMX8 Apalis board (for example, via scp).
 
